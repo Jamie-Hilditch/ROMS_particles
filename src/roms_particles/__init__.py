@@ -1,2 +1,2 @@
-def hello() -> str:
-    return "Hello from roms-particles!"
+"""Offline line advection of particles in ROMS simulations."""
+

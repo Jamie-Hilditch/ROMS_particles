@@ -10,6 +10,7 @@ import numpy.typing as npt
 
 from typing import Self
 
+
 @enum.unique
 class Stagger(enum.StrEnum):
     """Enumeration of possible grid staggerings for a dimension."""
@@ -111,7 +112,7 @@ class SpatialArray(abc.ABC):
         return self._x_offset
 
     @property
-    def offset(self) -> tuple[float | None, float | None, float | None]:
+    def offsets(self) -> tuple[float | None, float | None, float | None]:
         """Offset of the (z, y, x) dimensions."""
         return (self._z_offset, self._y_offset, self._x_offset)
 
@@ -120,31 +121,6 @@ class SpatialArray(abc.ABC):
     def shape(self) -> tuple[int, ...]:
         """Shape of the underlying data array."""
         pass
-
-    def offset_and_split_indices(
-        self, particle_indices: npt.NDArray[float]
-    ) -> tuple[npt.NDArray[int], npt.NDArray[float]]:
-        """Compute offset indices and split into integer and fractional parts.
-
-        Parameters
-        ----------
-        global_indices : npt.NDArray[float]
-            (N,3) Array of global indices where each row corresponds to a point in space
-            with respect to the centered grid. The columns correspond to (z, y, x) indices.
-
-        Returns
-        -------
-        tuple[npt.NDArray[int], npt.NDArray[float]]
-            Tuple of (N,M) arrays containing the integer and fractional indices.
-            The output indices account for the staggering and dimensionality of the grid.
-        """
-        return offset_and_split_indices(
-            particle_indices,
-            self._z_offset,
-            self._y_offset,
-            self._x_offset,
-            self.shape,
-        )
 
     @abc.abstractmethod
     def get_data_subset(
@@ -273,7 +249,11 @@ class ChunkedDaskArray(SpatialArray):
             The local indices account for the possibility that the view may be only a subset of the full domain.
         """
         recompute = compute_new_bounds(
-            global_indices, self._subset_lower_bounds, self._subset_upper_bounds, self._bounds)
+            global_indices,
+            self._subset_lower_bounds,
+            self._subset_upper_bounds,
+            self._bounds,
+        )
 
         if recompute:
             subset_slices = tuple(
@@ -285,88 +265,6 @@ class ChunkedDaskArray(SpatialArray):
         local_indices = global_indices - self._subset_lower_bounds[None, :]
         return self._subset, local_indices
 
-
-@numba.jit(parallel=True, nogil=True, fastmath=True)
-def _offset_indices(
-    idx: npt.NDArray[float],
-    offset_z: float | None,
-    offset_y: float | None,
-    offset_x: float | None,
-    out: npt.NDArray[float],
-) -> None:
-    """Compute offset indices.
-    Parameters:
-        idx: (N,3) array of floats where N is the number of particles
-        offset_z: index offset in the z direction
-        offset_y: index offset in the y direction
-        offset_x: index offset in the x direction
-        out: (N,M) array of floats where M is the number of non-None offsets.
-    """
-    col = 0
-    if offset_z is not None:
-        out[:, col] = idx[:, 0] + offset_z
-        col += 1
-    if offset_y is not None:
-        out[:, col] = idx[:, 1] + offset_y
-        col += 1
-    if offset_x is not None:
-        out[:, col] = idx[:, 2] + offset_x
-        col += 1
-
-
-@numba.jit(parallel=True, nogil=True, fastmath=True)
-def _split_indices(
-    idx: npt.NDArray[float], shape: tuple[int, ...]
-) -> tuple[npt.NDArray[int], npt.NDArray[float]]:
-    """Split indices into integer and fractional parts.
-    Parameters:
-        idx: (N,M) array of floats where N is the number of particles and M is the number of dimensions.
-        shape: M-tuple containing the shape of underlying data array
-    Returns:
-        tuple of:
-            - (N,M) array of integer indices
-            - (N,M) array of fractional indices
-    """
-    N, M = idx.shape
-    int_idx = np.empty((N, M), dtype=np.int32)
-    frac_idx = np.empty_like(idx)
-
-    for dim in range(M):
-        # find integer part, limited to penultimate index
-        np.floor(idx[:, dim], out=int_idx[:, dim], casting="unsafe")
-        np.clip(int_idx[:, dim], 0, shape[dim] - 2, out=int_idx[:, dim])
-        # compute fractional part as remainder
-        frac_idx[:, dim] = idx[:, dim] - int_idx[:, dim]
-
-    return int_idx, frac_idx
-
-
-@numba.jit(parallel=True, nogil=True, fastmath=True)
-def offset_and_split_indices(
-    idx: npt.NDArray[float],
-    offset_z: float | None,
-    offset_y: float | None,
-    offset_x: float | None,
-    shape: tuple[int, ...],
-) -> tuple[npt.NDArray[int], npt.NDArray[float]]:
-    """Compute offset indices and split into integer and fractional parts.
-    Parameters:
-        idx: (N,3) array of floats where N is the number of particles
-        offset_z: index offset in the z direction
-        offset_y: index offset in the y direction
-        offset_x: index offset in the x direction
-        shape: M-tuple containing the shape of underlying data array
-    Returns:
-        tuple of:
-            - (N,M) array of integer indices
-            - (N,M) array of fractional indices
-    """
-    N = idx.shape[0]
-    M = len(shape)
-
-    offset_idx = np.empty((N, M), dtype=idx.dtype)
-    _offset_indices(idx, offset_z, offset_y, offset_x, offset_idx)
-    return _split_indices(offset_idx, shape)
 
 @numba.jit(nogil=True, fastmath=True)
 def compute_new_bounds(
@@ -405,6 +303,7 @@ def compute_new_bounds(
 
     return bounds_changed
 
+
 # numba functions for chunk indexing
 @numba.jit(nogil=True)
 def _lower_chunk_bound(global_idx: int, bounds: npt.NDArray[int]) -> int:
@@ -418,4 +317,3 @@ def _upper_chunk_bound(global_idx: int, bounds: npt.NDArray[int]) -> int:
     """Get the bound of a chunk satisfying b >= global_idx."""
     idx = np.searchsorted(bounds, global_idx, side="left")
     return bounds[idx]
-

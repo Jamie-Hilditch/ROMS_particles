@@ -124,23 +124,23 @@ class SpatialArray(abc.ABC):
 
     @abc.abstractmethod
     def get_data_subset(
-        self, global_indices: npt.NDArray[int]
-    ) -> tuple[npt.NDArray[float], npt.NDArray[int]]:
-        """Get a subset of the data around the global indices.
+        self, particle_indices: npt.NDArray[float]
+    ) -> tuple[npt.NDArray[float], tuple[float | None, float | None, float | None]]:
+        """Get a subset of the data around the particle indices.
 
         Parameters
         ----------
-        global_indices : npt.NDArray[int]
-            (N,M) Array of global indices where N is the number of particles and M <= 3 is the dimensionality
-            of the spatial array.
+        particle_indices : npt.NDArray[float]
+            (N,3) Array of particle indices where N is the number of particles.
+            Particle indices are floats defined relative to the centered grid.
 
         Returns
         -------
         npt.NDArray[float]
-            (N,M) Array of values covering the global indices.
-        npt.NDArray[int]
-            (N,M) array containing the local integer indices.
-            The local indices account for the possibility that the view may be only a subset of the full domain.
+            (N,M) Array of values covering the particles.
+        tuple[float | None, float | None, float | None]
+            Offsets applied to the particle indices (z, y, x) in order to index into the returned data.
+            This accounts for both the grid staggering and any subsetting of the data array.
         """
         pass
 
@@ -164,26 +164,26 @@ class NumpyArray(SpatialArray):
         return self._data.shape
 
     def get_data_subset(
-        self, global_indices: npt.NDArray[int]
-    ) -> tuple[npt.NDArray[float], npt.NDArray[int]]:
-        """Get a view of the data around the global indices.
+        self, particle_indices: npt.NDArray[float]
+    ) -> tuple[npt.NDArray[float], tuple[float | None, float | None, float | None]]:
+        """Get a view of the data around the particle indices.
 
         Parameters
         ----------
-        global_indices : npt.NDArray[int]
-            (N,M) Array of global indices where N is the number of particles and M <= 3 is the dimensionality
-            of the spatial array.
+        particle_indices : npt.NDArray[float]
+            (N,3) Array of particle indices where N is the number of particles.
+            Particle indices are floats defined relative to the centered grid.
 
         Returns
         -------
         npt.NDArray[float]
-            (N,M) Array of values covering the global indices.
-        npt.NDArray[int]
-            (N,M) array containing the local integer indices.
-            The local indices account for the possibility that the view may be only a subset of the full domain.
+            (N,M) Array of values covering the particles.
+        tuple[float | None, float | None, float | None]
+            Offsets applied to the particle indices (z, y, x) in order to index into the returned data.
+            This accounts for both the grid staggering and any subsetting of the data array.
         """
         # Here all the data is in memory so we can just return the full data array and the indices unchanged
-        return self._data, global_indices
+        return self._data, self.offsets
 
 
 class ChunkedDaskArray(SpatialArray):
@@ -214,42 +214,28 @@ class ChunkedDaskArray(SpatialArray):
         """Shape of the underlying data array."""
         return self._shape
 
-    def _get_chunk(self, chunk_idx: tuple[int, ...]) -> npt.NDArray[float]:
-        """Get a chunk of data given its chunk index.
-
-        Parameters
-        ----------
-        chunk_idx : tuple[int, ...]
-            M-tuple of integers specifying the chunk index in each dimension.
-
-        Returns
-        -------
-        npt.NDArray[float]
-            Array of data for the specified chunk.
-        """
-        return self._data.blocks[chunk_idx].compute()
-
     def get_data_subset(
-        self, global_indices: npt.NDArray[int]
-    ) -> tuple[npt.NDArray[float], npt.NDArray[int]]:
-        """Get a view of the data around the global indices.
+        self, particle_indices: npt.NDArray[float]
+    ) -> tuple[npt.NDArray[float], tuple[float | None, float | None, float | None]]:
+        """Get a view of the data around the particle indices.
 
         Parameters
         ----------
-        global_indices : npt.NDArray[int]
-            (N,M) Array of global indices where N is the number of particles and M <= 3 is the dimensionality
-            of the spatial array.
+        particle_indices : npt.NDArray[float]
+            (N,3) Array of particle indices where N is the number of particles.
+            Particle indices are floats defined relative to the centered grid.
 
         Returns
         -------
         npt.NDArray[float]
-            (N,M) Array of values covering the global indices.
-        npt.NDArray[int]
-            (N,M) array containing the local integer indices.
-            The local indices account for the possibility that the view may be only a subset of the full domain.
+            (N,M) Array of values covering the particles.
+        tuple[float | None, float | None, float | None]
+            Offsets applied to the particle indices (z, y, x) in order to index into the returned data.
+            This accounts for both the grid staggering and any subsetting of the data array.
         """
-        recompute = compute_new_bounds(
-            global_indices,
+        recompute, offsets = compute_new_bounds(
+            particle_indices,
+            self._offsets,
             self._subset_lower_bounds,
             self._subset_upper_bounds,
             self._bounds,
@@ -262,13 +248,13 @@ class ChunkedDaskArray(SpatialArray):
             )
             self._subset = self._data[subset_slices].compute()
 
-        local_indices = global_indices - self._subset_lower_bounds[None, :]
-        return self._subset, local_indices
+        return self._subset, offsets
 
 
 @numba.jit(nogil=True, fastmath=True)
 def compute_new_bounds(
-    global_indices: npt.NDArray[int],
+    particle_indices: npt.NDArray[float],
+    offsets: tuple[float | None, float | None, float | None],
     lower: npt.NDArray[int],
     upper: npt.NDArray[int],
     bounds: tuple[npt.NDArray[int], ...],
@@ -276,19 +262,27 @@ def compute_new_bounds(
     """
     Compute new lower and upper bounds for chunked data access.
     Parameters:
-        global_indices: (N,M) array of global indices where N is the number of particles and M is the number of dimensions.
+        particle_indices: (N,M) array of global indices where N is the number of particles and M is the number of dimensions.
+        offsets: tuple of offsets to apply to the indices where M is the number of non-None offsets.
         lower: (M,) array of lower bounds.
         upper: (M,) array of upper bounds.
         bounds: tuple of M arrays containing the chunk boundaries for each dimension.
     Returns:
         - bool indicating whether the bounds have changed.
+        - offsets applied to the particle indices.
     """
-    M = global_indices.shape[1]
     bounds_changed = False
+    dim = 0
 
-    for dim in range(M):
-        global_lower = np.min(global_indices[:, dim])
-        global_upper = np.max(global_indices[:, dim]) + 1  # add 1 for upper bound
+    out_offsets = []
+
+    for i in range(3):
+        if offsets[i] is None:
+            out_offsets.append(None)
+            continue
+        # apply offset to particle indices
+        global_lower = np.min(particle_indices[:, dim]) + offsets[i]
+        global_upper = np.max(particle_indices[:, dim]) + offsets[i] + 1  # add 1 for upper bound
 
         # find chunk-aligned bounds
         lower_bound = _lower_chunk_bound(global_lower, bounds[dim])
@@ -301,19 +295,23 @@ def compute_new_bounds(
             upper[dim] = upper_bound
             bounds_changed = True
 
-    return bounds_changed
+        out_offsets.append(offsets[i] - lower_bound)
+
+        dim += 1
+
+    return bounds_changed, out_offsets
 
 
 # numba functions for chunk indexing
 @numba.jit(nogil=True)
-def _lower_chunk_bound(global_idx: int, bounds: npt.NDArray[int]) -> int:
+def _lower_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
     """Get the bound of a chunk satisfying b <= global_idx."""
     idx = np.searchsorted(bounds, global_idx, side="right") - 1
     return bounds[idx]
 
 
 @numba.jit(nogil=True)
-def _upper_chunk_bound(global_idx: int, bounds: npt.NDArray[int]) -> int:
+def _upper_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
     """Get the bound of a chunk satisfying b >= global_idx."""
     idx = np.searchsorted(bounds, global_idx, side="left")
     return bounds[idx]

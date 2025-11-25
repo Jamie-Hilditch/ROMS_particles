@@ -52,6 +52,10 @@ class Stagger(enum.StrEnum):
         return self is Stagger.INVARIANT
 
     @property
+    def is_active(self) -> bool:
+        return self is not Stagger.INVARIANT
+
+    @property
     def on_face(self) -> bool:
         return self in {Stagger.LEFT, Stagger.RIGHT, Stagger.INNER, Stagger.OUTER}
 
@@ -117,6 +121,26 @@ class SpatialArray(abc.ABC):
         return (self._z_offset, self._y_offset, self._x_offset)
 
     @property
+    def dmask(self) -> tuple[bool, bool, bool]:
+        """Mask indicating which dimensions are active."""
+        return (
+            self._z_stagger.is_active,
+            self._y_stagger.is_active,
+            self._x_stagger.is_active,
+        )
+
+    @property
+    def active_offsets(self) -> tuple[float, ...]:
+        """Offsets for active dimensions only."""
+        return tuple(
+            offset
+            for offset, is_active in zip(
+                (self._z_offset, self._y_offset, self._x_offset), self.dmask
+            )
+            if is_active
+        )
+
+    @property
     @abc.abstractmethod
     def shape(self) -> tuple[int, ...]:
         """Shape of the underlying data array."""
@@ -124,8 +148,11 @@ class SpatialArray(abc.ABC):
 
     @abc.abstractmethod
     def get_data_subset(
-        self, particle_indices: tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]]
-    ) -> tuple[npt.NDArray[float], tuple[float | None, float | None, float | None]]:
+        self,
+        particle_indices: tuple[
+            npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]
+        ],
+    ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
@@ -138,8 +165,8 @@ class SpatialArray(abc.ABC):
         -------
         npt.NDArray[float]
             (N,M) Array of values covering the particles.
-        tuple[float | None, float | None, float | None]
-            Offsets applied to the particle indices (z, y, x) in order to index into the returned data.
+        tuple[float, ...]
+            Offsets to apply to the active particle indices in order to index into the returned data.
             This accounts for both the grid staggering and any subsetting of the data array.
         """
         pass
@@ -164,8 +191,11 @@ class NumpyArray(SpatialArray):
         return self._data.shape
 
     def get_data_subset(
-        self, particle_indices: tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]]
-    ) -> tuple[npt.NDArray[float], tuple[float | None, float | None, float | None]]:
+        self,
+        particle_indices: tuple[
+            npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]
+        ],
+    ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
@@ -178,12 +208,12 @@ class NumpyArray(SpatialArray):
         -------
         npt.NDArray[float]
             (N,M) Array of values covering the particles.
-        tuple[float | None, float | None, float | None]
-            Offsets applied to the particle indices (z, y, x) in order to index into the returned data.
+        tuple[float, ...]
+            Offsets to apply to the active particle indices in order to index into the returned data.
             This accounts for both the grid staggering and any subsetting of the data array.
         """
         # Here all the data is in memory so we can just return the full data array and the indices unchanged
-        return self._data, self.offsets
+        return self._data, self.active_offsets
 
 
 class ChunkedDaskArray(SpatialArray):
@@ -206,8 +236,8 @@ class ChunkedDaskArray(SpatialArray):
         )
         self._subset: npt.NDArray[float] | None = None  # type: ignore[call-arg]
         # initialise lower and upper bounds to larger and smaller than possible values
-        self._subset_lower_bounds = np.array(self._shape, dtype=int)
-        self._subset_upper_bounds = np.zeros((self._ndim,), dtype=int)
+        self._subset_lower_bounds = np.empty((self._ndim,), dtype=int)
+        self._subset_upper_bounds = np.empty((self._ndim,), dtype=int)
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -215,8 +245,11 @@ class ChunkedDaskArray(SpatialArray):
         return self._shape
 
     def get_data_subset(
-        self, particle_indices: tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]]
-    ) -> tuple[npt.NDArray[float], tuple[float | None, float | None, float | None]]:
+        self,
+        particle_indices: tuple[
+            npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]
+        ],
+    ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
@@ -229,13 +262,19 @@ class ChunkedDaskArray(SpatialArray):
         -------
         npt.NDArray[float]
             (N,M) Array of values covering the particles.
-        tuple[float | None, float | None, float | None]
-            Offsets applied to the particle indices (z, y, x) in order to index into the returned data.
+        tuple[float, ...]
+            Offsets to apply to the active particle indices in order to index into the returned data.
             This accounts for both the grid staggering and any subsetting of the data array.
         """
+        active_particle_indices = tuple(
+            particle_index
+            for particle_index, is_active in zip(particle_indices, self.dmask)
+            if is_active
+        )
+
         recompute, offsets = compute_new_bounds(
-            particle_indices,
-            self.offsets,
+            active_particle_indices,
+            self.active_offsets,
             self._subset_lower_bounds,
             self._subset_upper_bounds,
             self._bounds,
@@ -253,53 +292,90 @@ class ChunkedDaskArray(SpatialArray):
 
 @numba.jit(nogil=True, fastmath=True)
 def compute_new_bounds(
-    particle_indices: tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]],
-    offsets: tuple[float | None, float | None, float | None],
+    active_particle_indices: tuple[npt.NDArray[float], ...],
+    offsets: tuple[float, ...],
     lower: npt.NDArray[int],
     upper: npt.NDArray[int],
     bounds: tuple[npt.NDArray[int], ...],
-) -> bool:
+) -> tuple[bool, tuple[float, ...]]:
     """
-    Compute new lower and upper bounds for chunked data access.
+    Compute new bounds for chunked data access.
     Parameters:
-        particle_indices: 3-tuple (z,y,x) of (N,) array of particle indices.
-        offsets: tuple of offsets to apply to the indices where M is the number of non-None offsets.
-        lower: (M,) array of lower bounds.
-        upper: (M,) array of upper bounds.
-        bounds: tuple of M arrays containing the chunk boundaries for each dimension.
+        active_particle_indices: tuple of (N,) arrays of particle indices for active dimensions.
+        offsets: tuple of offsets to apply to the indices.
+        lower: lower bounds for each dimension - modified inplace.
+        upper: upper bounds for each dimension - modified inplace.
+        bounds: tuple of arrays containing the chunk boundaries for each dimension.
     Returns:
-        - bool indicating whether the bounds have changed.
-        - offsets applied to the particle indices.
+        - bool: whether the bounds have changed.
+        - tuple[float, ...]: offsets applied to the particle indices in order to index into the returned data.
     """
-    bounds_changed = False
-    dim = 0
+    recompute = False
+    new_offsets = []
+    M = len(active_particle_indices)
 
-    out_offsets = []
+    for m in range(M):
+        offset = offsets[m]
+        new_lower = compute_new_lower_bound(
+            active_particle_indices[m], offset, bounds[m]
+        )
+        new_upper = compute_new_upper_bound(
+            active_particle_indices[m], offset, bounds[m]
+        )
 
-    for i in range(3):
-        if offsets[i] is None:
-            out_offsets.append(None)
-            continue
-        # apply offset to particle indices
-        global_lower = np.min(particle_indices[dim]) + offsets[i]
-        global_upper = np.max(particle_indices[dim]) + offsets[i] + 1  # add 1 for upper bound
+        new_offsets.append(offset - new_lower)
 
-        # find chunk-aligned bounds
-        lower_bound = _lower_chunk_bound(global_lower, bounds[dim])
-        upper_bound = _upper_chunk_bound(global_upper, bounds[dim])
+        if new_lower != lower[m] or new_upper != upper[m]:
+            recompute = True
+            lower[m] = new_lower
+            upper[m] = new_upper
 
-        if lower_bound != lower[dim]:
-            lower[dim] = lower_bound
-            bounds_changed = True
-        if upper_bound != upper[dim]:
-            upper[dim] = upper_bound
-            bounds_changed = True
+    return recompute, tuple(new_offsets)
 
-        out_offsets.append(offsets[i] - lower_bound)
 
-        dim += 1
+@numba.jit(nogil=True, fastmath=True)
+def compute_new_lower_bound(
+    particle_indices: npt.NDArray[float],
+    offset: float,
+    bounds: npt.NDArray[int],
+) -> int:
+    """
+    Compute new lower bound for chunked data access.
+    Parameters:
+        particle_indices: (N,) array of particle indices.
+        offset: offset to apply to the indices.
+        bounds: array containing the chunk boundaries.
+    Returns:
+        - int: lower bound.
+    """
+    global_lower = np.min(particle_indices) + offset
 
-    return bounds_changed, out_offsets
+    # clamp to chunk boundaries
+    lower_bound = _lower_chunk_bound(global_lower, bounds)
+
+    return lower_bound
+
+
+@numba.jit(nogil=True, fastmath=True)
+def compute_new_upper_bound(
+    particle_indices: npt.NDArray[float],
+    offset: float,
+    bounds: npt.NDArray[int],
+) -> int:
+    """
+    Compute new upper bound for chunked data access.
+    Parameters:
+        particle_indices: (N,) array of particle indices.
+        offset: offset to apply to the indices.
+        bounds: array containing the chunk boundaries.
+    Returns:
+        - int: upper bound.
+    """
+    global_upper = np.max(particle_indices) + offset + 1  # add 1 for upper bound
+
+    # clamp to chunk boundaries
+    upper_bound = _upper_chunk_bound(global_upper, bounds)
+    return upper_bound
 
 
 # numba functions for chunk indexing

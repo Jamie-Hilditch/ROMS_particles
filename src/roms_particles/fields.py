@@ -79,7 +79,7 @@ class Field(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def validate_shape(self, domain_shape: tuple[int, int, int, int]) -> None:
+    def validate_shape(self, simulation_shape: tuple[int, int, int, int]) -> None:
         """Validate that the field's shape is compatible with the domain shape."""
         pass
 
@@ -126,6 +126,17 @@ class StaticField(Field):
         """The underlying spatial array data."""
         return self._data
 
+    def __repr__(self) -> str:
+        return (
+            f"StaticField(shape={self._data.shape}, "
+            f"z_stagger={self.z_stagger}, "
+            f"y_stagger={self.y_stagger}, "
+            f"x_stagger={self.x_stagger})"
+        )
+
+    def __str__(self) -> str:
+        return f"StaticField on z={self.z_stagger.name}, y={self.y_stagger.name}, x={self.x_stagger.name} grid"  
+
     @property
     def spatial_shape(self) -> tuple[int, ...]:
         """Shape of the spatial dimensions of the field."""
@@ -136,12 +147,12 @@ class StaticField(Field):
         """Number of spatial dimensions of the field."""
         return len(self.spatial_shape)
 
-    def validate_shape(self, domain_shape: tuple[int, int, int, int]) -> None:
+    def validate_shape(self, simulation_shape: tuple[int, int, int, int]) -> None:
         """Validate that the field's shape is compatible with the domain shape."""
         staggered_shape = (
-            self.z_stagger.expected_size(domain_shape[1]),
-            self.y_stagger.expected_size(domain_shape[2]),
-            self.x_stagger.expected_size(domain_shape[3]),
+            self.z_stagger.expected_size(simulation_shape[1]),
+            self.y_stagger.expected_size(simulation_shape[2]),
+            self.x_stagger.expected_size(simulation_shape[3]),
         )
         expected_shape = tuple(s for s in staggered_shape if s is not None)
         if self._data.shape != expected_shape:
@@ -246,6 +257,18 @@ class TimeDependentField(Field):
         """The underlying time-dependent data array."""
         return self._data
 
+    def __repr__(self) -> str:
+        return (
+            f"TimeDependentField(shape={self._data.shape}, "
+            f"z_stagger={self.z_stagger}, "
+            f"y_stagger={self.y_stagger}, "
+            f"x_stagger={self.x_stagger}, "
+            f"spatial_array_factory={self._spatial_array_factory.__name__})"
+        )
+
+    def __str__(self) -> str:
+        return f"TimeDependentField on z={self.z_stagger.name}, y={self.y_stagger.name}, x={self.x_stagger.name} grid" 
+
     @property
     def spatial_shape(self) -> tuple[int, ...]:
         """Shape of the spatial dimensions of the field."""
@@ -256,13 +279,13 @@ class TimeDependentField(Field):
         """Number of spatial dimensions of the field."""
         return len(self.spatial_shape)
 
-    def validate_shape(self, domain_shape: tuple[int, int, int, int]) -> None:
+    def validate_shape(self, simulation_shape: tuple[int, int, int, int]) -> None:
         """Validate that the field's shape is compatible with the domain shape."""
         staggered_shape = (
-            domain_shape[0],
-            self.z_stagger.expected_size(domain_shape[1]),
-            self.y_stagger.expected_size(domain_shape[2]),
-            self.x_stagger.expected_size(domain_shape[3]),
+            simulation_shape[0],
+            self.z_stagger.expected_size(simulation_shape[1]),
+            self.y_stagger.expected_size(simulation_shape[2]),
+            self.x_stagger.expected_size(simulation_shape[3]),
         )
         expected_shape = tuple(s for s in staggered_shape if s is not None)
         if self._data.shape != expected_shape:

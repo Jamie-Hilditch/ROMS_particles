@@ -11,6 +11,7 @@ import numpy.typing as npt
 
 from typing import Self
 
+type BBox = tuple[float, float, float, float, float, float]
 
 @enum.unique
 class Stagger(enum.StrEnum):
@@ -150,7 +151,7 @@ class SpatialArray(abc.ABC):
     @abc.abstractmethod
     def get_data_subset(
         self,
-        bounding_box: tuple[float, float, float, float, float, float],
+        bounding_box: BBox,
     ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
@@ -191,7 +192,7 @@ class NumpyArray(SpatialArray):
 
     def get_data_subset(
         self,
-        bounding_box: tuple[float, float, float, float, float, float],
+        bounding_box: BBox,
     ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
@@ -243,7 +244,7 @@ class ChunkedDaskArray(SpatialArray):
 
     def get_data_subset(
         self,
-        bounding_box: tuple[float, float, float, float, float, float],
+        bounding_box: BBox,
     ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 

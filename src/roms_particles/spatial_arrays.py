@@ -2,6 +2,7 @@
 
 import abc
 import enum
+import itertools
 
 import dask.array as da
 import numba
@@ -149,17 +150,15 @@ class SpatialArray(abc.ABC):
     @abc.abstractmethod
     def get_data_subset(
         self,
-        particle_indices: tuple[
-            npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]
-        ],
+        bounding_box: tuple[float, float, float, float, float, float],
     ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
         ----------
-        particle_indices : tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]]
-            3-tuple (z,y,x) of (N,) arrays of particle indices where N is the number of particles.
-            Particle indices are floats defined relative to the centered grid.
+        bounding_box : tuple[float, float, float, float, float, float]
+            6-tuple (z_min, z_max, y_min, y_max, x_min, x_max) defining the bounding box of particle indices
+            where z,y,x are floats defined relative to the centered grid.
 
         Returns
         -------
@@ -192,17 +191,15 @@ class NumpyArray(SpatialArray):
 
     def get_data_subset(
         self,
-        particle_indices: tuple[
-            npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]
-        ],
+        bounding_box: tuple[float, float, float, float, float, float],
     ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
         ----------
-        particle_indices : tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]]
-            3-tuple (z,y,x) of (N,) arrays of particle indices where N is the number of particles.
-            Particle indices are floats defined relative to the centered grid.
+        bounding_box : tuple[float, float, float, float, float, float]
+            6-tuple (z_min, z_max, y_min, y_max, x_min, x_max) defining the bounding box of particle indices
+            where z,y,x are floats defined relative to the centered grid.
 
         Returns
         -------
@@ -246,17 +243,15 @@ class ChunkedDaskArray(SpatialArray):
 
     def get_data_subset(
         self,
-        particle_indices: tuple[
-            npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]
-        ],
+        bounding_box: tuple[float, float, float, float, float, float],
     ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
         ----------
-        particle_indices : tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[float]]
-            3-tuple (z,y,x) of (N,) arrays of particle indices where N is the number of particles.
-            Particle indices are floats defined relative to the centered grid.
+        bounding_box : tuple[float, float, float, float, float, float]
+            6-tuple (z_min, z_max, y_min, y_max, x_min, x_max) defining the bounding box of particle indices
+            where z,y,x are floats defined relative to the centered grid.
 
         Returns
         -------
@@ -266,14 +261,14 @@ class ChunkedDaskArray(SpatialArray):
             Offsets to apply to the active particle indices in order to index into the returned data.
             This accounts for both the grid staggering and any subsetting of the data array.
         """
-        active_particle_indices = tuple(
-            particle_index
-            for particle_index, is_active in zip(particle_indices, self.dmask)
+        active_dims_bbox = tuple(
+            dim_bounds
+            for dim_bounds, is_active in zip(itertools.batched(bounding_box, 2), self.dmask)
             if is_active
         )
 
         recompute, offsets = compute_new_bounds(
-            active_particle_indices,
+            active_dims_bbox,
             self.active_offsets,
             self._subset_lower_bounds,
             self._subset_upper_bounds,
@@ -292,7 +287,7 @@ class ChunkedDaskArray(SpatialArray):
 
 @numba.jit(nogil=True, fastmath=True)
 def compute_new_bounds(
-    active_particle_indices: tuple[npt.NDArray[float], ...],
+    active_dims_bbox: tuple[tuple[float, float], ...],
     offsets: tuple[float, ...],
     lower: npt.NDArray[int],
     upper: npt.NDArray[int],
@@ -301,7 +296,7 @@ def compute_new_bounds(
     """
     Compute new bounds for chunked data access.
     Parameters:
-        active_particle_indices: tuple of (N,) arrays of particle indices for active dimensions.
+        active_dims_bbox: tuple of (min, max) tuples defining the bounding box for each active dimensions.
         offsets: tuple of offsets to apply to the indices.
         lower: lower bounds for each dimension - modified inplace.
         upper: upper bounds for each dimension - modified inplace.
@@ -312,15 +307,16 @@ def compute_new_bounds(
     """
     recompute = False
     new_offsets = []
-    M = len(active_particle_indices)
+    M = len(active_dims_bbox)
 
     for m in range(M):
         offset = offsets[m]
+        dim_min, dim_max = active_dims_bbox[m]
         new_lower = compute_new_lower_bound(
-            active_particle_indices[m], offset, bounds[m]
+            dim_min, offset, bounds[m]
         )
         new_upper = compute_new_upper_bound(
-            active_particle_indices[m], offset, bounds[m]
+            dim_max, offset, bounds[m]
         )
 
         new_offsets.append(offset - new_lower)
@@ -335,20 +331,20 @@ def compute_new_bounds(
 
 @numba.jit(nogil=True, fastmath=True)
 def compute_new_lower_bound(
-    particle_indices: npt.NDArray[float],
+    dim_min: float,
     offset: float,
     bounds: npt.NDArray[int],
 ) -> int:
     """
     Compute new lower bound for chunked data access.
     Parameters:
-        particle_indices: (N,) array of particle indices.
+        dim_min: lower bound of the bounding box.
         offset: offset to apply to the indices.
         bounds: array containing the chunk boundaries.
     Returns:
         - int: lower bound.
     """
-    global_lower = np.min(particle_indices) + offset
+    global_lower = dim_min + offset
 
     # clamp to chunk boundaries
     lower_bound = _lower_chunk_bound(global_lower, bounds)
@@ -356,22 +352,22 @@ def compute_new_lower_bound(
     return lower_bound
 
 
-@numba.jit(nogil=True, fastmath=True)
+@numba.njit(nogil=True, fastmath=True)
 def compute_new_upper_bound(
-    particle_indices: npt.NDArray[float],
+    dim_max: float,
     offset: float,
     bounds: npt.NDArray[int],
 ) -> int:
     """
     Compute new upper bound for chunked data access.
     Parameters:
-        particle_indices: (N,) array of particle indices.
+        dim_max: upper bound of the bounding box.
         offset: offset to apply to the indices.
         bounds: array containing the chunk boundaries.
     Returns:
         - int: upper bound.
     """
-    global_upper = np.max(particle_indices) + offset + 1  # add 1 for upper bound
+    global_upper = dim_max + offset + 1  # add 1 for upper bound
 
     # clamp to chunk boundaries
     upper_bound = _upper_chunk_bound(global_upper, bounds)
@@ -379,14 +375,14 @@ def compute_new_upper_bound(
 
 
 # numba functions for chunk indexing
-@numba.jit(nogil=True)
+@numba.njit(nogil=True, fastmath=True)
 def _lower_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
     """Get the bound of a chunk satisfying b <= global_idx."""
     idx = np.searchsorted(bounds, global_idx, side="right") - 1
     return bounds[idx]
 
 
-@numba.jit(nogil=True)
+@numba.njit(nogil=True, fastmath=True)
 def _upper_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
     """Get the bound of a chunk satisfying b >= global_idx."""
     idx = np.searchsorted(bounds, global_idx, side="left")

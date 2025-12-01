@@ -3,34 +3,25 @@
 import numba 
 import numpy.typing as npt
 
-from typing import NamedTuple, Callable, Iterable
+from typing import Callable, Iterable, Self
 
 type Particle = npt.NDArray
+type FieldData = tuple[npt.NDArray[float], tuple[int, int, int], tuple[float,...]]
 
-class Tinfo(NamedTuple):
-    time: float
-    dt: float
-    t_idx: float
-    dt_idx: float
-
-class FieldData(NamedTuple):
-    data: npt.NDArray
-    dmask: tuple[int, int, int]
-    offsets: tuple[float,...]
-
-type KernelFunction = Callable[[Particle, Tinfo, FieldData, ...], None]
+type KernelFunction = Callable[[Particle, FieldData, ...], None]
 
 class ParticleKernel:
-    """A kernel to be executed on particles."""
+    """A kernel to be executed on a particle."""
 
     def __init__(self, 
         kernel_function: KernelFunction,
         particle_fields: Iterable[str],
         simulation_fields: Iterable[str],
     ) -> None:
-        self._kernel_function = numba.jit(kernel_function, nogil=True, fastmath=True)
+        self._kernel_function = numba.njit(nogil=True, fastmath=True)(kernel_function)
         self._particle_fields = set(particle_fields)
         self._simulation_fields = tuple(simulation_fields)
+        self._vector_kernel_function = _vectorize_kernel_function(self._kernel_function)
 
     @property
     def particle_fields(self) -> set[str]:
@@ -42,7 +33,7 @@ class ParticleKernel:
         """The simulation fields required by this kernel."""
         return self._simulation_fields
 
-    def chain_with(self, other: "ParticleKernel") -> "ParticleKernel":
+    def chain_with(self, other: Self) -> Self:
         """Create a ParticleKernel by chaining this kernel with another."""
 
         combined_particle_fields = set(self.particle_fields).union(other.particle_fields)
@@ -53,24 +44,15 @@ class ParticleKernel:
         first_indices = tuple(combined_simulation_fields.index(f) for f in self.simulation_fields)
         second_indices = tuple(combined_simulation_fields.index(f) for f in other.simulation_fields)
 
-        def chained_kernel(
-            p: Particle, 
-            tinfo: Tinfo, 
-            *field_data: FieldData
-        ) -> None:
-            first_field_data = [field_data[i] for i in first_indices]
-            second_field_data = [field_data[i] for i in second_indices]
+        first_function = self._kernel_function
+        second_function = other._kernel_function
 
-            self._kernel_function(
-                p, 
-                tinfo, 
-                *first_field_data
-            )
-            other._kernel_function(
-                p, 
-                tinfo, 
-                *second_field_data
-            )
+        chained_kernel = _chain_kernel_functions(
+            first_function,
+            second_function,
+            first_indices,
+            second_indices,
+        )
 
         return ParticleKernel(
             chained_kernel,
@@ -89,3 +71,49 @@ class ParticleKernel:
         for kernel in kernel_iter:
             combined_kernel = combined_kernel.chain_with(kernel)
         return combined_kernel
+
+
+def _vectorize_kernel_function(
+    particle_kernel_function: KernelFunction
+) -> KernelFunction:
+    """Create a vectorized version of a particle kernel function."""
+
+    @numba.njit(nogil=True, fastmath=True, parallel=True)
+    def vectorized_kernel_function(
+        particles: Particle,
+        *field_data: FieldData
+    ) -> None:
+        n_particles = particles.shape[0]
+        for i in numba.prange(n_particles):
+            particle_kernel_function(
+                particles[i],
+                *field_data
+            )
+
+    return vectorized_kernel_function
+
+def _chain_kernel_functions(
+    first_function: KernelFunction,
+    second_function: KernelFunction,
+    first_indices: tuple[int, ...],
+    second_indices: tuple[int, ...],
+) -> KernelFunction:
+    """Chain two kernel functions together."""
+
+    def chained_function(
+        p: Particle,
+        *field_data: FieldData
+    ) -> None:
+        first_field_data = tuple(field_data[i] for i in first_indices)
+        second_field_data = tuple(field_data[i] for i in second_indices)
+
+        first_function(
+            p, 
+            *first_field_data
+        )
+        second_function(
+            p,  
+            *second_field_data
+        )
+
+    return chained_function

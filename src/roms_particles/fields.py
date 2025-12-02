@@ -1,15 +1,14 @@
 """Submodule for handling fields in ROMS particle tracking simulations."""
 
 import abc
+from typing import Callable
 
 import dask.array as da
 import numpy as np
 import numpy.typing as npt
 
-from typing import Callable
-
-from .spatial_arrays import Stagger, SpatialArray, NumpyArray, ChunkedDaskArray, BBox
 from .kernels import FieldData
+from .spatial_arrays import BBox, ChunkedDaskArray, NumpyArray, SpatialArray, Stagger
 
 
 class Field(abc.ABC):

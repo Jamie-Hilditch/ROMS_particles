@@ -1,16 +1,15 @@
 """Submodule for particle kernel launchers."""
 
 import abc
+from typing import Callable, Iterable, Self
 
 import numpy as np
 import numpy.typing as npt
 
 from .fieldset import Fieldset
-from .kernel import ParticleKernel, FieldData
+from .kernel import FieldData, ParticleKernel
 from .kernel_tools import unsafe_inverse_linear_interpolation
 from .spatial_arrays import BBox
-
-from typing import Iterable, Callable, Self
 
 # -------------------------------
 # FieldData provider descriptor

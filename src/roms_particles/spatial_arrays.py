@@ -4,13 +4,12 @@ import abc
 import collections
 import enum
 import itertools
+from typing import Self
 
 import dask.array as da
 import numba
 import numpy as np
 import numpy.typing as npt
-
-from typing import Self
 
 BBox = collections.namedtuple("BBox", ("zmin", "zmax", "ymin", "ymax", "xmin", "xmax"))
 

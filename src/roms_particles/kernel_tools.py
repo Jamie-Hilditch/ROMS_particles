@@ -1,8 +1,9 @@
 """A submodule with utility functions for kernel operations."""
 
-import numba 
+import numba
 import numpy as np
 import numpy.typing as npt
+
 
 @numba.njit(nogil=True, fastmath=True)
 def unsafe_inverse_linear_interpolation(array: npt.NDArray, value: float) -> float:

@@ -1,10 +1,10 @@
 """Submodule for constructing and running kernels on particles."""
 
 import collections
-import numba 
-import numpy.typing as npt
-
 from typing import Callable, Iterable, Self
+
+import numba
+import numpy.typing as npt
 
 """The FieldData type for passing data into kernels."""
 FieldData = collections.namedtuple("FieldData", ("array", "dmask", "offsets"))

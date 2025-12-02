@@ -1,11 +1,11 @@
 """Submodule for Fieldset, a collection of fields from a simulation."""
 
-from collections.abc import KeysView, ValuesView, ItemsView
+from collections.abc import ItemsView, KeysView, ValuesView
 from numbers import Number
 
-from .spatial_arrays import BBox
-from .fields import Field, ConstantField
+from .fields import ConstantField, Field
 from .kernel import FieldData
+from .spatial_arrays import BBox
 
 
 class Fieldset:

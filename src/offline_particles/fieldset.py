@@ -127,6 +127,6 @@ class Fieldset(KernelDataSource):
             f"{key} = {value}" for key, value in self._fields.items()
         )
         return (
-            f"FieldSet(\n\tt_size={self.t_size}, z_size={self.z_size}, y_size={self.y_size}, x_size={self.x_size},"
+            f"Fieldset(\n\tt_size={self.t_size}, z_size={self.z_size}, y_size={self.y_size}, x_size={self.x_size},"
             + f"\n\t{field_str}\n)"
         )

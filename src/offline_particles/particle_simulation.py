@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .fieldset import FieldSet
+from .fieldset import Fieldset
 from .kernel_data import KernelDataSource
 from .launchers import Launcher
 from .particle_kernel import merge_particle_fields
@@ -13,7 +13,7 @@ from .timesteppers import Timestepper
 class ParticleSimulation: 
     """Class representing a particle simulation."""
 
-    def __init__(self, nparticles: int, timestepper: Timestepper, fieldset: FieldSet, tasks: dict[str, Task]) -> None:
+    def __init__(self, nparticles: int, timestepper: Timestepper, fieldset: Fieldset, tasks: dict[str, Task]) -> None:
         """Initialize the ParticleSimulation.
 
         Args:
@@ -51,11 +51,11 @@ class ParticleSimulation:
         return self._timestepper
 
     @property
-    def fieldset(self) -> FieldSet:
+    def fieldset(self) -> Fieldset:
         """Get the fieldset used in the simulation.
 
         Returns:
-            FieldSet: The fieldset instance.
+            Fieldset: The fieldset instance.
         """
         return self._fieldset
 
@@ -115,7 +115,7 @@ class ParticleSimulation:
 
 
 class SimulationBuilder:
-    def __init__(self, timestepper: Timestepper, fieldset: FieldSet, **tasks: Task) -> None:
+    def __init__(self, timestepper: Timestepper, fieldset: Fieldset, **tasks: Task) -> None:
         """Class for build a ParticleSimulation.
 
         Args:

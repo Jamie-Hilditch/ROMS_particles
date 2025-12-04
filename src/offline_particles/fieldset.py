@@ -16,6 +16,7 @@ class Fieldset(KernelDataSource):
         x_size: int,
         **kwargs: Field,
     ) -> None:
+        super().__init__()
         # sizes of centered dimensions
         self._t_size = t_size
         self._z_size = z_size

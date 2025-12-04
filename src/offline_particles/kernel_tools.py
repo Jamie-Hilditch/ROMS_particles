@@ -46,7 +46,7 @@ def unwrap_scalar(kernel_data: KernelData) -> Number:
     return kernel_data.array[()]
 
 @numba.njit(nogil=True, fastmath=True)
-def offset_indices(particle: npt.NDArray, kernel_data: KernelData) -> npt.NDArray[float]:
+def offset_indices(particle_indices: tuple[float, float, float], kernel_data: KernelData) -> npt.NDArray[float]:
     """Compute offset indices for a particle based on kernel data.
     
     Parameters:
@@ -58,7 +58,6 @@ def offset_indices(particle: npt.NDArray, kernel_data: KernelData) -> npt.NDArra
     """
     dmask = kernel_data.dmask
     offsets = kernel_data.offsets
-    particle_index_names = ("zidx", "yidx", "xidx")
 
     M = len(offsets)
     out = np.empty(M, dtype=np.float64)
@@ -67,10 +66,10 @@ def offset_indices(particle: npt.NDArray, kernel_data: KernelData) -> npt.NDArra
     for i in range(3):
         if dmask[i] == 0:
             continue 
-        out[m] = particle[particle_index_names[i]] + offsets[m]
+        out[m] = particle_indices[i] + offsets[m]
         m += 1
 
-    return tuple(out)
+    return out
 
 @numba.njit(nogil=True, fastmath=True)
 def split_index(idx: float) -> tuple[int, float]:

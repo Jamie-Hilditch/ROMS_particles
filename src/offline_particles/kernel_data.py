@@ -94,6 +94,11 @@ class register_kernel_data:
     def __init__(self, name: str):
         self.name = name
         self.method_name = None
+        self.func = None 
+
+    def __call__(self, func: KernelDataFunction):
+        self.func = func
+        return self
 
     def __set_name__(self, owner, method_name: str):
         self.method_name = method_name
@@ -106,4 +111,4 @@ class register_kernel_data:
         if instance is None:
             return self
         # Return bound method
-        return getattr(instance, self.method_name)
+        return self.func.__get__(instance, owner)

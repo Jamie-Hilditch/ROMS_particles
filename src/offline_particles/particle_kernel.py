@@ -94,6 +94,7 @@ def merge_particle_fields(kernels: Iterable[ParticleKernel]) -> dict[str, np.dty
                     )
             else:
                 merged_fields[field] = np.dtype(dtype)
+    return merged_fields
 
 
 def _vectorize_kernel_function(

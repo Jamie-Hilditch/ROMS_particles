@@ -310,7 +310,7 @@ def compute_new_bounds(
         - tuple[float, ...]: offsets applied to the particle indices in order to index into the returned data.
     """
     recompute = False
-    new_offsets = []
+    new_offsets = ()
     M = len(active_dims_bbox)
 
     for m in range(M):
@@ -319,14 +319,14 @@ def compute_new_bounds(
         new_lower = compute_new_lower_bound(dim_min, offset, bounds[m])
         new_upper = compute_new_upper_bound(dim_max, offset, bounds[m])
 
-        new_offsets.append(offset - new_lower)
+        new_offsets = new_offsets + (offset - new_lower)
 
         if new_lower != lower[m] or new_upper != upper[m]:
             recompute = True
             lower[m] = new_lower
             upper[m] = new_upper
 
-    return recompute, tuple(new_offsets)
+    return recompute, new_offsets
 
 
 @numba.jit(nogil=True, fastmath=True)

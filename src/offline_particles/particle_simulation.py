@@ -24,12 +24,11 @@ class ParticleSimulation:
         self._tasks = tasks
 
         # create launcher and register kernel data functions
-        self._launcher = Launcher()
-        self._launcher.register_kernel_data_functions_from_source(self._timestepper)
-        self._launcher.register_kernel_data_functions_from_source(self._fieldset)
+        self._launcher = Launcher(fieldset)
+        self._launcher.maybe_increase_index_padding(timestepper.index_padding)
+        self._launcher.register_scalar_data_sources_from_object(self._timestepper)
         for task in self._tasks.values():
-            if isinstance(task, KernelDataSource):
-                self._launcher.register_kernel_data_functions_from_source(task)
+            self._launcher.register_scalar_data_sources_from_object(task)
 
         # construct the particle dtype 
         kernels = list(self._timestepper.kernels())

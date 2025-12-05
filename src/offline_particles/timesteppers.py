@@ -5,14 +5,12 @@ import abc
 import numpy as np
 import numpy.typing as npt
 
-from .kernel_data import KernelData, KernelDataSource, register_kernel_data
 from .kernel_tools import unsafe_inverse_linear_interpolation
-from .launcher import Launcher
+from .launcher import Launcher, register_scalar_data_source
 from .particle_kernel import ParticleKernel
-from .spatial_arrays import BBox
 
 
-class Timestepper(KernelDataSource, abc.ABC):
+class Timestepper(abc.ABC):
     """Class that handles particle advection timestepping."""
 
     def __init__(
@@ -31,8 +29,7 @@ class Timestepper(KernelDataSource, abc.ABC):
 
         # store timestep, current time and current time index
         self._dt = dt
-        self._time = time
-        self._tidx = self.get_time_index(time)
+        self.set_time(time)
 
     @property
     def dt(self) -> float:
@@ -49,20 +46,20 @@ class Timestepper(KernelDataSource, abc.ABC):
         """The current time index for this launcher."""
         return self._tidx
 
-    @register_kernel_data("_dt")
-    def dt_kernel_data(self, tidx: float, bbox: BBox) -> KernelData:
-        """get dt as field data."""
-        return KernelData(array=np.asarray(self._dt), dmask=(0, 0, 0), offsets=())
+    @register_scalar_data_source("_dt")
+    def dt_scalar_data(self, *args) -> float:
+        """get dt."""
+        return self._dt
 
-    @register_kernel_data("_time")
-    def time_kernel_data(self, tidx: float, bbox: BBox) -> KernelData:
-        """get time as field data."""
-        return KernelData(array=np.asarray(self._time), dmask=(0, 0, 0), offsets=())
+    @register_scalar_data_source("_time")
+    def time_kernel_data(self, *args) -> float:
+        """get time."""
+        return self._time
 
-    @register_kernel_data("_tidx")
-    def tidx_kernel_data(self, tidx: float, bbox: BBox) -> KernelData:
+    @register_scalar_data_source("_tidx")
+    def tidx_kernel_data(self, *args) -> float:
         """get time index as field data."""
-        return KernelData(array=np.asarray(self._tidx), dmask=(0, 0, 0), offsets=())
+        return self._tidx
 
     def get_time_index(self, time: float) -> float:
         """Get the time index corresponding to the given time."""
@@ -75,6 +72,11 @@ class Timestepper(KernelDataSource, abc.ABC):
         """Advance the current time by dt and update the time index."""
         self._time += self._dt
         self._tidx = self.get_time_index(self._time)
+
+    def set_time(self, time: float) -> None:
+        """Set the current time and update the time index."""
+        self._time = time
+        self._tidx = self.get_time_index(time)
 
     @abc.abstractmethod
     def timestep_particles(self, particles: npt.NDArray, launcher: Launcher) -> None:
@@ -120,10 +122,10 @@ class RK2Timestepper(Timestepper):
         """The RK2 alpha parameter used by this launcher."""
         return self._alpha
 
-    @register_kernel_data("_RK2_alpha")
-    def get_alpha_kernel_data(self, tidx: float, bbox: BBox) -> KernelData:
-        """get alpha as field data."""
-        return KernelData(array=np.asarray(self._alpha), dmask=(0, 0, 0), offsets=())
+    @register_scalar_data_source("_RK2_alpha")
+    def get_alpha_kernel_data(self, *args) -> float:
+        """get alpha."""
+        return self._alpha
 
     def kernels(self) -> tuple[ParticleKernel, ParticleKernel, ParticleKernel]:
         return (

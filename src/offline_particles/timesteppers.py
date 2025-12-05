@@ -31,6 +31,8 @@ class Timestepper(abc.ABC):
         self._dt = dt
         self.set_time(time)
 
+        self._index_padding = index_padding
+
     @property
     def dt(self) -> float:
         """The time step for this launcher."""
@@ -45,6 +47,11 @@ class Timestepper(abc.ABC):
     def tidx(self) -> float:
         """The current time index for this launcher."""
         return self._tidx
+
+    @property
+    def index_padding(self) -> int:
+        """The index padding required by this timestepper."""
+        return self._index_padding
 
     @register_scalar_data_source("_dt")
     def dt_scalar_data(self, *args) -> float:

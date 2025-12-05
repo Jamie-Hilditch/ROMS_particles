@@ -1,12 +1,8 @@
 """A submodule with utility functions for kernel operations."""
 
-from numbers import Number
-
 import numba
 import numpy as np
 import numpy.typing as npt
-
-from .kernel_data import KernelData
 
 
 @numba.njit(nogil=True, fastmath=True)
@@ -30,46 +26,28 @@ def unsafe_inverse_linear_interpolation(array: npt.NDArray, value: float) -> flo
     fraction = (value - x0) / (x1 - x0)
     return idx + fraction
 
-@numba.njit(nogil=True, fastmath=True)
-def unwrap_scalar(kernel_data: KernelData) -> Number:
-    """Unwrap a scalar kernel value from KernelData.
-
-    Parameters:
-        kernel_data: KernelData object containing the kernel values.
-
-    Returns:
-        The scalar kernel value.
-
-    Raises:
-        ValueError: If the kernel data does not contain exactly one value.
-    """
-    return kernel_data.array[()]
 
 @numba.njit(nogil=True, fastmath=True)
-def offset_indices(particle_indices: tuple[float, float, float], kernel_data: KernelData) -> npt.NDArray[float]:
-    """Compute offset indices for a particle based on kernel data.
-    
-    Parameters:
-        particle: numpy scalar containing particle data.
-        kernel_data: KernelData.
+def offset_indices_1D(pidx0: float, offsets: tuple[float]) -> float:
+    """Offset a particle index."""
+    return pidx0 + offsets[0]
 
-    Returns:
-        A tuple of numpy scalars representing the offset indices.
-    """
-    dmask = kernel_data.dmask
-    offsets = kernel_data.offsets
 
-    M = len(offsets)
-    out = np.empty(M, dtype=np.float64)
-    m = 0
+@numba.njit(nogil=True, fastmath=True)
+def offset_indices_2D(
+    pidx0: float, pidx1: float, offsets: tuple[float, float]
+) -> tuple[float, float]:
+    """Offset  2 particle indices."""
+    return pidx0 + offsets[0], pidx1 + offsets[1]
 
-    for i in range(3):
-        if dmask[i] == 0:
-            continue 
-        out[m] = particle_indices[i] + offsets[m]
-        m += 1
 
-    return out
+@numba.njit(nogil=True, fastmath=True)
+def offset_indices_3D(
+    pidx0: float, pidx1: float, pidx2: float, offsets: tuple[float, float, float]
+) -> tuple[float, float, float]:
+    """Offset 3 particle indices."""
+    return pidx0 + offsets[0], pidx1 + offsets[1], pidx2 + offsets[2]
+
 
 @numba.njit(nogil=True, fastmath=True)
 def split_index(idx: float) -> tuple[int, float]:
@@ -84,4 +62,3 @@ def split_index(idx: float) -> tuple[int, float]:
     int_idx = np.floor(idx)
     frac_idx = idx - int_idx
     return int(int_idx), frac_idx
-    

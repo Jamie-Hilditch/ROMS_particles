@@ -75,6 +75,7 @@ def compute_zidx_from_S(
 ) -> float:
     """Compute zidx from S-coordinate."""
     C_size = C.shape[0]
+    C_offset = C_offset[0]
 
     # compute sigma and S arrays
     rho_indices = np.arange(C_size, dtype=np.float64) - C_offset

@@ -138,7 +138,7 @@ def _vectorize_kernel_function(
         particles: Particle, *kernel_data: KernelData
     ) -> None:
         n_particles = particles.shape[0]
-        for i in range(n_particles):
+        for i in numba.prange(n_particles):
             particle_kernel_function(particles[i], *kernel_data)
 
     return vectorized_kernel_function

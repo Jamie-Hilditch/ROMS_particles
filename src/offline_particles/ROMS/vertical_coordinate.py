@@ -78,7 +78,7 @@ def compute_zidx_from_S(
     C_offset = C_offset[0]
 
     # compute sigma and S arrays
-    rho_indices = np.arange(C_size, dtype=np.float64) - C_offset
+    rho_indices = np.arange(C_size).astype(np.float64) - C_offset
     sigma_array = (rho_indices + 0.5) / NZ - 1.0
     S_array = S_coordinate(hc, sigma_array, h_value, C)
 
@@ -93,6 +93,6 @@ def compute_zidx_from_S(
         Sidx = C_size - 2 + (S - S0) / (S1 - S0)
     else:
         Sidx = unsafe_inverse_linear_interpolation(S_array, S)
-    zidx = Sidx + C_offset
+    zidx = Sidx - C_offset
     
     return zidx

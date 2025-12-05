@@ -10,6 +10,7 @@ import numpy.typing as npt
 from .kernel_data import KernelData
 from .spatial_arrays import BBox, ChunkedDaskArray, NumpyArray, SpatialArray, Stagger
 
+type FieldData = tuple[npt.NDArray[float], tuple[float, ...]]
 
 class Field(abc.ABC):
     """Abstract base class for fields used in particle tracking."""
@@ -93,7 +94,7 @@ class Field(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def get_kernel_data(self, time_index: float, bbox: BBox) -> KernelData:
+    def get_field_data(self, time_index: float, bbox: BBox) -> FieldData:
         """Get the field data at a given time index.
 
          Parameters
@@ -105,70 +106,10 @@ class Field(abc.ABC):
 
         Returns
         -------
-        KernelData
-            Namedtuple containing the field data array, the dimension mask, and offsets.
+        FieldData
+            Tuple containing the field data array and offsets.
         """
         pass
-
-
-class ConstantField(Field):
-    """Class representing a constant field with a single value."""
-
-    def __init__(self, value: float):
-        super().__init__(
-            z_stagger=Stagger.INVARIANT,
-            y_stagger=Stagger.INVARIANT,
-            x_stagger=Stagger.INVARIANT,
-        )
-        self._value = value
-        self._array = np.asarray(self._value)
-
-    @property
-    def value(self) -> float:
-        """The constant value of the field."""
-        return self._value
-
-    def __repr__(self) -> str:
-        return f"ConstantField(value={self._value})"
-
-    def __str__(self) -> str:
-        return f"ConstantField with value {self._value}"
-
-    @property
-    def spatial_shape(self) -> tuple[int, ...]:
-        """Shape of the spatial dimensions of the field."""
-        return ()
-
-    @property
-    def nspatial_dims(self) -> int:
-        """Number of spatial dimensions of the field."""
-        return 0
-
-    def validate_shape(self, simulation_shape: tuple[int, int, int, int]) -> None:
-        """Validate that the field's shape is compatible with the domain shape.
-
-        Since this is a constant field, it is always valid.
-        """
-        pass
-
-    def get_kernel_data(self, time_index: float, bbox: BBox) -> KernelData:
-        """Get the field data at a given time index.
-
-        Since this is a constant field, the time_index and bbox are ignored.
-
-        Parameters
-        ----------
-        time_index : float
-            Time index (ignored for constant fields).
-        bbox : BBox
-            Bounding box to extract data from defined in terms of centered grid indices (ignored for constant fields).
-
-        Returns
-        -------
-        KernelData
-            Namedtuple containing the field data array, the dimension mask, and offsets.
-        """
-        return KernelData(array=self._array, dmask=self._dmask, offsets=())
 
 
 class StaticField(Field):
@@ -224,7 +165,7 @@ class StaticField(Field):
                 f"Expected shape {expected_shape} but data has shape {self._data.shape}"
             )
 
-    def get_kernel_data(self, time_index: float, bbox: BBox) -> KernelData:
+    def get_field_data(self, time_index: float, bbox: BBox) -> KernelData:
         """Get the field data at a given time index.
 
         Since this is a static field, the time_index is ignored.
@@ -238,12 +179,11 @@ class StaticField(Field):
 
         Returns
         -------
-        KernelData
-            Namedtuple containing the field data array, the dimension mask, and offsets.
+        FieldData
+            Tuple containing the field data array and offsets.
         """
         # For static fields, we ignore time_index
-        data_array, offsets = self._data.get_data_subset(bbox)
-        return KernelData(array=data_array, dmask=self._dmask, offsets=offsets)
+        return self._data.get_data_subset(bbox)
 
     @classmethod
     def from_numpy(
@@ -283,84 +223,6 @@ class StaticField(Field):
 type SpatialArrayFactory = Callable[
     [da.Array | npt.NDArray, Stagger, Stagger, Stagger], SpatialArray
 ]
-
-
-class TemporalField(Field):
-    """Class representing a spatially invariant time dependent field."""
-
-    def __init__(
-        self,
-        data: npt.NDArray,
-    ):
-        super().__init__(
-            z_stagger=Stagger.INVARIANT,
-            y_stagger=Stagger.INVARIANT,
-            x_stagger=Stagger.INVARIANT,
-        )
-        if data.ndim != 1:
-            raise ValueError(
-                "TemporalField requires a 1D array of time-dependent values."
-            )
-        self._data = data
-        self._num_timesteps = self._data.shape[0]
-
-    @property
-    def data(self) -> npt.NDArray:
-        """The underlying time-dependent data array."""
-        return self._data
-
-    def __repr__(self) -> str:
-        return f"TemporalField(shape={self._data.shape})"
-
-    def __str__(self) -> str:
-        return f"TemporalField of length {self._data.shape[0]}"
-
-    @property
-    def spatial_shape(self) -> tuple[int, ...]:
-        """Shape of the spatial dimensions of the field."""
-        return ()
-
-    @property
-    def nspatial_dims(self) -> int:
-        """Number of spatial dimensions of the field."""
-        return 0
-
-    def validate_shape(self, simulation_shape: tuple[int, int, int, int]) -> None:
-        """Validate that the field's shape is compatible with the domain shape.
-
-        Since this is a spatially invariant field, it is always valid.
-        """
-        if self._data.size != simulation_shape[0]:
-            raise ValueError(
-                f"Expected length {simulation_shape[0]} but data has length {self._data.size}"
-            )
-
-    def get_kernel_data(self, time_index: float, bbox: BBox) -> KernelData:
-        """Get the field data at a given time index.
-
-         Parameters
-        ----------
-        time_index : float
-            Time index.
-        bbox : BBox
-            Bounding box to extract data from defined in terms of centered grid indices (ignored for spatially invariant fields).
-
-        Returns
-        -------
-        KernelData
-            Namedtuple containing the field data array, the dimension mask, and offsets.
-        """
-        if time_index < 0 or time_index >= self._num_timesteps - 1:
-            raise IndexError(
-                f"Valid range of time indices is [0,{self._num_timesteps - 1}), got {time_index}."
-            )
-        It, ft = divmod(time_index, 1)
-        It = int(It)
-
-        value = (1 - ft) * self._data[It] + ft * self._data[It + 1]
-        array = np.asarray(value)
-        return KernelData(array=array, dmask=self._dmask, offsets=())
-
 
 class TimeDependentField(Field):
     """Class representing a time-dependent field with an least 1 spatial dimension."""
@@ -488,7 +350,7 @@ class TimeDependentField(Field):
             self.x_stagger,
         )
 
-    def get_kernel_data(self, time_index: float, bbox: BBox) -> KernelData:
+    def get_field_data(self, time_index: float, bbox: BBox) -> KernelData:
         """Get the field data at a given time index.
 
          Parameters
@@ -500,8 +362,8 @@ class TimeDependentField(Field):
 
         Returns
         -------
-        KernelData
-            Namedtuple containing the field data array, the dimension mask, and offsets.
+        FieldData
+            Tuple containing the field data array and offsets.
         """
         It, ft = divmod(time_index, 1)
         It = int(It)
@@ -515,7 +377,7 @@ class TimeDependentField(Field):
 
         # linear interpolation in time
         data_array = current_data * (1.0 - ft) + next_data * ft
-        return KernelData(array=data_array, dmask=self._dmask, offsets=offsets)
+        return data_array, offsets
 
     @classmethod
     def from_numpy(

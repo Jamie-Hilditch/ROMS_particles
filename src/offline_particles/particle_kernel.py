@@ -19,12 +19,14 @@ class ParticleKernel:
         self,
         kernel_function: KernelFunction,
         particle_fields: dict[str, npt.DTypeLike],
+        scalars: Iterable[str],
         simulation_fields: Iterable[str],
     ) -> None:
         self._kernel_function = numba.njit(nogil=True, fastmath=True)(kernel_function)
         self._particle_fields = {
             field: np.dtype(dtype) for field, dtype in particle_fields.items()
         }
+        self._scalars = tuple(scalars)
         self._simulation_fields = tuple(simulation_fields)
         self._vector_kernel_function = _vectorize_kernel_function(self._kernel_function)
 
@@ -32,6 +34,11 @@ class ParticleKernel:
     def particle_fields(self) -> dict[str, np.dtype]:
         """The particle fields required by this kernel."""
         return self._particle_fields
+
+    @property
+    def scalars(self) -> tuple[str]:
+        """The scalars required by this kernel."""
+        return self._scalars
 
     @property
     def simulation_fields(self) -> tuple[str]:
@@ -44,18 +51,42 @@ class ParticleKernel:
         combined_particle_fields = merge_particle_fields(
             self.particle_fields, other.particle_fields
         )
+        combined_scalars = tuple(
+            set(self.scalars).union(other.scalars)
+        )
         combined_simulation_fields = tuple(
             set(self.simulation_fields).union(other.simulation_fields)
         )
 
-        # find the indices of the fields in the combined tuple
-        # these are tuples of ints so numba will treat them as compile time constants
-        first_indices = tuple(
-            combined_simulation_fields.index(f) for f in self.simulation_fields
+        nscalars = len(combined_scalars)
+        # find indices of the arguments in the combined argument list
+        first_indices = [] 
+        second_indices = []
+
+        # first the scalars
+        for s in self.scalars:
+            first_indices.append(combined_scalars.index(s))
+        for s in other.scalars:
+            second_indices.append(combined_scalars.index(s))
+
+        # then the fields
+        for f in self.simulation_fields:
+            first_indices.append(
+                nscalars + 2 * combined_simulation_fields.index(f)
+            )
+            first_indices.append(
+                nscalars + 2 * combined_simulation_fields.index(f) + 1
+            )
+        tuple(
+            combined_scalars.index(s) for s in self.scalars
         )
-        second_indices = tuple(
-            combined_simulation_fields.index(f) for f in other.simulation_fields
-        )
+        for f in other.simulation_fields:
+            second_indices.append(
+                nscalars + 2 * combined_simulation_fields.index(f)
+            )
+            second_indices.append(
+                nscalars + 2 * combined_simulation_fields.index(f) + 1
+            )
 
         first_function = self._kernel_function
         second_function = other._kernel_function
@@ -116,16 +147,27 @@ def _vectorize_kernel_function(
 def _chain_kernel_functions(
     first_function: KernelFunction,
     second_function: KernelFunction,
-    first_indices: tuple[int, ...],
-    second_indices: tuple[int, ...],
+    first_indices: Iterable[int],
+    second_indices: Iterable[int],
 ) -> KernelFunction:
-    """Chain two kernel functions together."""
+    """Build a chained kernel function by statically generating the source code."""
 
-    def chained_function(p: Particle, *kernel_data: KernelData) -> None:
-        first_kernel_data = tuple(kernel_data[i] for i in first_indices)
-        second_kernel_data = tuple(kernel_data[i] for i in second_indices)
+    # argument list for the first and second functions
+    a_args = ", ".join(f"args[{i}]" for i in first_indices)
+    b_args = ", ".join(f"args[{i}]" for i in second_indices)
+    
+    # source code 
+    src = []
+    src.append("def chained_function(p, *args):")
+    src.append(f"    first_function(p, {a_args})")
+    src.append(f"    second_function(p, {b_args})")
+    src_code = "\n".join(src)
 
-        first_function(p, *first_kernel_data)
-        second_function(p, *second_kernel_data)
-
-    return chained_function
+    # local namespace for exec
+    local_ns = {
+        "first_function": first_function,
+        "second_function": second_function,
+    }   
+    exec(src_code, local_ns)
+    return local_ns["chained_function"]
+    

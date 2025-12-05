@@ -1,20 +1,35 @@
 """Submodule for Fieldset, a collection of fields from a simulation."""
 
-from collections.abc import ItemsView, KeysView, ValuesView
+import types
 from numbers import Number
+from typing import ItemsView, KeysView, Mapping, ValuesView
 
-from .fields import ConstantField, Field
-from .kernel_data import KernelDataSource
+from .fields import Field
 
 
-class Fieldset(KernelDataSource):
+class Fieldset:
+    """Class representing a collection of fields from a simulation.
+
+    Can also hold associated constants.
+
+    Parameters:
+        t_size: size of the time dimension
+        z_size: size of the centered z dimension
+        y_size: size of the centered y dimension
+        x_size: size of the centered x dimension
+        constants: optional keyword argument, dictionary of constants to add to the fieldset
+        fields: fields to add to the fieldset as keyword arguments
+    """
+
     def __init__(
         self,
         t_size: int,
         z_size: int,
         y_size: int,
         x_size: int,
-        **kwargs: Field,
+        *,
+        constants: dict[str, Number] | None = None,
+        **fields: Field,
     ) -> None:
         super().__init__()
         # sizes of centered dimensions
@@ -24,9 +39,15 @@ class Fieldset(KernelDataSource):
         self._x_size = x_size
 
         self._fields: dict[str, Field] = {}
+        self._constants: dict[str, Number] = {}
 
-        # add fields and constants
-        for name, field in kwargs.items():
+        # add constants
+        if constants is not None:
+            for name, value in constants.items():
+                self.add_constant(name, value)
+
+        # add fields
+        for name, field in fields.items():
             self.add_field(name, field)
 
     @property
@@ -55,9 +76,14 @@ class Fieldset(KernelDataSource):
         return (self._t_size, self._z_size, self._y_size, self._x_size)
 
     @property
-    def fields(self) -> dict[str, Field]:
+    def fields(self) -> Mapping[str, Field]:
         """Dictionary of fields in the fieldset."""
-        return self._fields
+        return types.MappingProxyType(self._fields)
+
+    @property
+    def constants(self) -> Mapping[str, Number]:
+        """Dictionary of constants in the fieldset."""
+        return types.MappingProxyType(self._constants)
 
     def add_field(self, name: str, field: Field) -> None:
         """Add a field to the fieldset.
@@ -65,26 +91,15 @@ class Fieldset(KernelDataSource):
             name: name of the field
             field: Field object
         """
-        if name in self._fields:
+        if name in self:
             raise KeyError(
-                f"'{name}' already exists in Fieldset. First remove it before adding a new one."
+                f"Field '{name}' already exists in Fieldset. First remove it before adding a new one."
             )
         try:
             field.validate_shape(self.simulation_shape)
         except ValueError as e:
             raise ValueError(f"Error validating shape of Field '{name}'.") from e
         self._fields[name] = field
-        self.register_kernel_data_function(name, field.get_kernel_data)
-
-    def remove_field(self, name: str) -> None:
-        """Remove a field from the fieldset.
-        Parameters:
-            name: name of the field
-        """
-        if name not in self._fields:
-            raise KeyError(f"Field '{name}' does not exist in Fieldset. Cannot remove.")
-        self.deregister_kernel_data_function(name)
-        del self._fields[name]
 
     def add_constant(self, name: str, value: Number) -> None:
         """Convenience method for adding a constant field to the fieldset.
@@ -92,7 +107,27 @@ class Fieldset(KernelDataSource):
             name: name of the constant
             value: value of the constant
         """
-        self.add_field(name, ConstantField(value))
+        if name in self._constants or name in self:
+            raise KeyError(
+                f"'{name}' already exists in Fieldset. First remove it before adding a new one."
+            )
+        self._constants[name] = value
+
+    def remove(self, name: str) -> None:
+        """Remove a field or constant from the fieldset.
+        Parameters:
+            name: name of the field
+        """
+        if name in self._constants:
+            del self._constants[name]
+            return
+        if name in self._fields:
+            del self._fields[name]
+            return 
+        raise KeyError(f"Field '{name}' does not exist in Fieldset. Cannot remove.")
+
+        del self._fields[name]
+
 
     def __getitem__(self, name: str) -> Field:
         """Get a field from the fieldset.
@@ -101,9 +136,10 @@ class Fieldset(KernelDataSource):
         Returns:
             Field object or float value of the constant
         """
-        if name not in self._fields:
-            raise KeyError(f"'{name}' does not exist in Fieldset.")
-        return self._fields[name]
+        if name in self._fields:
+            return self._fields[name]
+        raise KeyError(f"Field '{name}' does not exist in Fieldset.")
+        
 
     def __contains__(self, name: str) -> bool:
         """Check if a field exists in the fieldset.
@@ -120,14 +156,15 @@ class Fieldset(KernelDataSource):
     def values(self) -> ValuesView[Field]:
         return self._fields.values()
 
-    def items(self) -> ItemsView[str, Field]:
+    def items(self) -> ItemsView[tuple[str, Field]]:
         return self._fields.items()
 
     def __repr__(self) -> str:
+        constant_str = f"constants={self._constants}, "
         field_str = ", \n\t".join(
             f"{key} = {value}" for key, value in self._fields.items()
         )
         return (
             f"Fieldset(\n\tt_size={self.t_size}, z_size={self.z_size}, y_size={self.y_size}, x_size={self.x_size},"
-            + f"\n\t{field_str}\n)"
+            + f"\n\t{constant_str}\n\t{field_str}\n)"
         )

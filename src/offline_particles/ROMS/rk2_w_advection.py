@@ -150,7 +150,7 @@ def _rk2_step_2(
     zeta_value = bilinear_interpolation(zeta_idx, zeta)
     
     S = S_from_z(z, h_value, zeta_value)
-    zidx = compute_zidx_from_S(S, hc, NZ, h_value, zeta_value, C)
+    zidx = compute_zidx_from_S(S, hc, NZ, h_value, zeta_value, C, C_off)
     
     # horizontal advection in index space
     # offset indices for u, v, dx, dy
@@ -229,7 +229,7 @@ def _rk2_update(
     zeta_value = bilinear_interpolation(zeta_idx, zeta)
     
     S = S_from_z(particle["z"], h_value, zeta_value)
-    particle["zidx"] = compute_zidx_from_S(S, hc, NZ, h_value, zeta_value, C)
+    particle["zidx"] = compute_zidx_from_S(S, hc, NZ, h_value, zeta_value, C, C_off)
 
 rk2_update_kernel = ParticleKernel(
     _rk2_update,

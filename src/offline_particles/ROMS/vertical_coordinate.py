@@ -2,8 +2,8 @@
 
 import numba
 import numpy as np
+import numpy.typing as npt
 
-from ..kernel_data import KernelData
 from ..kernel_tools import unsafe_inverse_linear_interpolation
 
 
@@ -70,16 +70,16 @@ def compute_zidx_from_S(
     NZ: int,
     h_value: float,
     zeta_value: float,
-    C: KernelData,
+    C: npt.NDArray[float],
+    C_offset: float,
 ) -> float:
     """Compute zidx from S-coordinate."""
-    C_offset = C.offsets[0]
-    C_size = C.array.shape[0]
+    C_size = C.shape[0]
 
     # compute sigma and S arrays
     rho_indices = np.arange(C_size, dtype=np.float64) - C_offset
     sigma_array = (rho_indices + 0.5) / NZ - 1.0
-    S_array = S_coordinate(hc, sigma_array, h_value, C.array)
+    S_array = S_coordinate(hc, sigma_array, h_value, C)
 
     # inverse interpolation to get zidx
     if S <= S_array[0]:

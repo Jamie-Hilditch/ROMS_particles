@@ -19,6 +19,10 @@ class ParticleKernel:
         particle_fields: dict[str, npt.DTypeLike],
         scalars: Iterable[str],
         simulation_fields: Iterable[str],
+        *,
+        fastmath: bool = True,
+        nogil: bool = True,
+        parallel: bool = True,
     ) -> None:
         self._kernel_function = numba.njit(nogil=True, fastmath=True)(kernel_function)
         self._particle_fields = {
@@ -26,7 +30,12 @@ class ParticleKernel:
         }
         self._scalars = tuple(scalars)
         self._simulation_fields = tuple(simulation_fields)
-        self._vector_kernel_function = _vectorize_kernel_function(self._kernel_function)
+        self._fastmath = fastmath
+        self._nogil = nogil
+        self._parallel = parallel
+        self._vector_kernel_function = _vectorize_kernel_function(
+            self._kernel_function, fastmath=fastmath, nogil=nogil, parallel=parallel
+        )
 
     @property
     def particle_fields(self) -> dict[str, np.dtype]:
@@ -43,22 +52,35 @@ class ParticleKernel:
         """The simulation fields required by this kernel."""
         return self._simulation_fields
 
+    @property
+    def fastmath(self) -> bool:
+        """Whether the kernel function is compiled with fastmath."""
+        return self._fastmath   
+
+    @property
+    def nogil(self) -> bool:
+        """Whether the kernel function is compiled with nogil."""
+        return self._nogil
+
+    @property
+    def parallel(self) -> bool:
+        """Whether the kernel function is compiled with parallel."""
+        return self._parallel
+
     def chain_with(self, other: Self) -> Self:
         """Create a ParticleKernel by chaining this kernel with another."""
 
         combined_particle_fields = merge_particle_fields(
             self.particle_fields, other.particle_fields
         )
-        combined_scalars = tuple(
-            set(self.scalars).union(other.scalars)
-        )
+        combined_scalars = tuple(set(self.scalars).union(other.scalars))
         combined_simulation_fields = tuple(
             set(self.simulation_fields).union(other.simulation_fields)
         )
 
         nscalars = len(combined_scalars)
         # find indices of the arguments in the combined argument list
-        first_indices = [] 
+        first_indices = []
         second_indices = []
 
         # first the scalars
@@ -69,19 +91,11 @@ class ParticleKernel:
 
         # then the fields
         for f in self.simulation_fields:
-            first_indices.append(
-                nscalars + 2 * combined_simulation_fields.index(f)
-            )
-            first_indices.append(
-                nscalars + 2 * combined_simulation_fields.index(f) + 1
-            )
-        tuple(
-            combined_scalars.index(s) for s in self.scalars
-        )
+            first_indices.append(nscalars + 2 * combined_simulation_fields.index(f))
+            first_indices.append(nscalars + 2 * combined_simulation_fields.index(f) + 1)
+        tuple(combined_scalars.index(s) for s in self.scalars)
         for f in other.simulation_fields:
-            second_indices.append(
-                nscalars + 2 * combined_simulation_fields.index(f)
-            )
+            second_indices.append(nscalars + 2 * combined_simulation_fields.index(f))
             second_indices.append(
                 nscalars + 2 * combined_simulation_fields.index(f) + 1
             )
@@ -128,13 +142,14 @@ def merge_particle_fields(kernels: Iterable[ParticleKernel]) -> dict[str, np.dty
 
 def _vectorize_kernel_function(
     particle_kernel_function: KernelFunction,
+    fastmath: bool,
+    nogil: bool,
+    parallel: bool,
 ) -> KernelFunction:
     """Create a vectorized version of a particle kernel function."""
 
-    @numba.njit(nogil=True, fastmath=True, parallel=False)
-    def vectorized_kernel_function(
-        particles: Particle, *kernel_data
-    ) -> None:
+    @numba.njit(nogil=nogil, fastmath=fastmath, parallel=parallel)
+    def vectorized_kernel_function(particles: Particle, *kernel_data) -> None:
         n_particles = particles.shape[0]
         for i in numba.prange(n_particles):
             particle_kernel_function(particles[i], *kernel_data)
@@ -153,8 +168,8 @@ def _chain_kernel_functions(
     # argument list for the first and second functions
     a_args = ", ".join(f"args[{i}]" for i in first_indices)
     b_args = ", ".join(f"args[{i}]" for i in second_indices)
-    
-    # source code 
+
+    # source code
     src = []
     src.append("def chained_function(p, *args):")
     src.append(f"    first_function(p, {a_args})")
@@ -165,7 +180,6 @@ def _chain_kernel_functions(
     local_ns = {
         "first_function": first_function,
         "second_function": second_function,
-    }   
+    }
     exec(src_code, local_ns)
     return local_ns["chained_function"]
-    

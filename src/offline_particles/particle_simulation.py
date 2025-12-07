@@ -9,10 +9,20 @@ from .tasks import SimulationState, Task
 from .timesteppers import Timestepper
 
 
-class ParticleSimulation: 
+class ParticleSimulation:
     """Class representing a particle simulation."""
 
-    def __init__(self, nparticles: int, timestepper: Timestepper, fieldset: Fieldset, tasks: dict[str, Task]) -> None:
+    def __init__(
+        self,
+        nparticles: int,
+        timestepper: Timestepper,
+        fieldset: Fieldset,
+        tasks: dict[str, Task],
+        *,
+        zidx_bounds: tuple[float, float] | None = None,
+        yidx_bounds: tuple[float, float] | None = None,
+        xidx_bounds: tuple[float, float] | None = None,
+    ) -> None:
         """Initialize the ParticleSimulation.
 
         Args:
@@ -22,6 +32,17 @@ class ParticleSimulation:
         self._fieldset = fieldset
         self._tasks = tasks
 
+        # set default index bounds if not provided
+        if zidx_bounds is None:
+            zidx_bounds = (0.0, float(self._fieldset.z_size - 1))
+        if yidx_bounds is None:
+            yidx_bounds = (0.0, float(self._fieldset.y_size - 1))
+        if xidx_bounds is None:
+            xidx_bounds = (0.0, float(self._fieldset.x_size - 1))
+        self._zidx_bounds = zidx_bounds
+        self._yidx_bounds = yidx_bounds
+        self._xidx_bounds = xidx_bounds
+
         # create launcher and register kernel data functions
         self._launcher = Launcher(fieldset)
         self._launcher.maybe_increase_index_padding(timestepper.index_padding)
@@ -29,12 +50,34 @@ class ParticleSimulation:
         for task in self._tasks.values():
             self._launcher.register_scalar_data_sources_from_object(task)
 
-        # construct the particle dtype 
+        # register index bounds as scalar data sources
+        self._launcher.register_scalar_data_source(
+            "zidx_min", lambda tidx: self._zidx_bounds[0]
+        )
+        self._launcher.register_scalar_data_source(
+            "zidx_max", lambda tidx: self._zidx_bounds[1]
+        )
+        self._launcher.register_scalar_data_source(
+            "yidx_min", lambda tidx: self._yidx_bounds[0]
+        )
+        self._launcher.register_scalar_data_source(
+            "yidx_max", lambda tidx: self._yidx_bounds[1]
+        )
+        self._launcher.register_scalar_data_source(
+            "xidx_min", lambda tidx: self._xidx_bounds[0]
+        )
+        self._launcher.register_scalar_data_source(
+            "xidx_max", lambda tidx: self._xidx_bounds[1]
+        )
+
+        # construct the particle dtype
         kernels = list(self._timestepper.kernels())
         for task in self._tasks.values():
             kernels.append(task.kernels())
         particle_fields = merge_particle_fields(kernels)
-        self._particle_dtype = np.dtype([(field, dtype) for field, dtype in particle_fields.items()])
+        self._particle_dtype = np.dtype(
+            [(field, dtype) for field, dtype in particle_fields.items()]
+        )
 
         # create particles array
         self._particles = np.empty((nparticles,), dtype=self._particle_dtype)
@@ -113,7 +156,16 @@ class ParticleSimulation:
 
 
 class SimulationBuilder:
-    def __init__(self, timestepper: Timestepper, fieldset: Fieldset, **tasks: Task) -> None:
+    def __init__(
+        self,
+        timestepper: Timestepper,
+        fieldset: Fieldset,
+        *,
+        zidx_bounds: tuple[float, float] | None = None,
+        yidx_bounds: tuple[float, float] | None = None,
+        xidx_bounds: tuple[float, float] | None = None,
+        **tasks: Task,
+    ) -> None:
         """Class for build a ParticleSimulation.
 
         Args:
@@ -121,6 +173,9 @@ class SimulationBuilder:
         """
         self._timestepper = timestepper
         self._fieldset = fieldset
+        self._zidx_bounds = zidx_bounds
+        self._yidx_bounds = yidx_bounds 
+        self._xidx_bounds = xidx_bounds
 
         # tasks
         self._tasks = {}
@@ -134,7 +189,9 @@ class SimulationBuilder:
             task: The task to be added to the launcher.
         """
         if key in self._tasks:
-            raise KeyError(f"Task with key '{key}' already exists in the simulation. Please remove it before adding a new one.")
+            raise KeyError(
+                f"Task with key '{key}' already exists in the simulation. Please remove it before adding a new one."
+            )
         self._tasks[key] = task
 
     def remove_task(self, key: str) -> None:
@@ -144,7 +201,9 @@ class SimulationBuilder:
             key: The key of the task to be removed.
         """
         if key not in self._tasks:
-            raise KeyError(f"Task with key '{key}' does not exist in the simulation. Cannot remove.")
+            raise KeyError(
+                f"Task with key '{key}' does not exist in the simulation. Cannot remove."
+            )
         del self._tasks[key]
 
     def build_simulation(self, nparticles: int) -> ParticleSimulation:
@@ -158,4 +217,7 @@ class SimulationBuilder:
             timestepper=self._timestepper,
             fieldset=self._fieldset,
             tasks=self._tasks,
+            zidx_bounds=self._zidx_bounds,
+            yidx_bounds=self._yidx_bounds,
+            xidx_bounds=self._xidx_bounds,
         )

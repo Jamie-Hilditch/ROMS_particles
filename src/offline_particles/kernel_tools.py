@@ -60,6 +60,7 @@ def split_index(idx: float, max_idx: int) -> tuple[int, float]:
 
     """
     int_idx = int(np.floor(idx))
-    int_idx = np.clip(int_idx, 0, max_idx)
+    int_idx = max(0, int_idx)
+    int_idx = min(max_idx, int_idx)
     frac_idx = idx - int_idx
     return int_idx, frac_idx

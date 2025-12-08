@@ -171,8 +171,8 @@ def _vectorize_kernel_function(
         for i in numba.prange(n_particles):
             particle = particles[i]
             # skip inactive particles
-            if particle["status"] > 0:
-                continue
+            # if particle["status"] > 0:
+            #    continue
             particle_kernel_function(particle, *kernel_data)
 
     return vectorized_kernel_function

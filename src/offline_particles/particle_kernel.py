@@ -169,10 +169,11 @@ def _vectorize_kernel_function(
     def vectorized_kernel_function(particles: Particle, *kernel_data) -> None:
         n_particles = particles.shape[0]
         for i in numba.prange(n_particles):
+            particle = particles[i]
             # skip inactive particles
-            if particles["status"][i] > 0:
+            if particle["status"] > 0:
                 continue
-            particle_kernel_function(particles[i], *kernel_data)
+            particle_kernel_function(particle, *kernel_data)
 
     return vectorized_kernel_function
 

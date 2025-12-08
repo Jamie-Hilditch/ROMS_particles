@@ -385,5 +385,5 @@ def _lower_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
 @numba.njit(nogil=True, fastmath=True)
 def _upper_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
     """Get the bound of a chunk satisfying b >= global_idx."""
-    idx = np.searchsorted(bounds, global_idx, side="left")
+    idx = np.searchsorted(bounds, global_idx, side="left") + 1
     return bounds[idx]

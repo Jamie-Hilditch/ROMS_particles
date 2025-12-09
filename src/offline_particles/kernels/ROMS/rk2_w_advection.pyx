@@ -11,10 +11,15 @@ from cython.parallel cimport prange
 
 from ..core cimport unpack_fielddata_1d, unpack_fielddata_2d, unpack_fielddata_3d
 from ..interpolation cimport trilinear_interpolation, bilinear_interpolation, linear_interpolation
-from .vertical_coordinate cimport S_from_z, z_from_S, compute_zidx_from_S
+from .vertical_coordinate cimport S_from_z, z_from_S, compute_zidx_from_S, sigma_coordinate
+
+import functools
+
+from ...particle_kernel import ParticleKernel
+from ...timesteppers import RK2TimeStepper
 
 
-cdef void _rk2_step_1(Particles particles, Scalars scalars, FieldData fielddata):
+cdef void _rk2_step_1(particles, scalars, fielddata):
     # unpack required particle fields
     cdef unsigned char status[::1] = particles.status
     cdef double[::1] zidx = particles.zidx
@@ -116,7 +121,7 @@ cdef void _rk2_step_1(Particles particles, Scalars scalars, FieldData fielddata)
 
            
 
-cdef void _rk2_step_2(Particles particles, Scalars scalars, FieldData fielddata):
+cdef void _rk2_step_2(particles, scalars, fielddata):
     # unpack required particle fields
     cdef unsigned char status[::1] = particles.status
     cdef double[::1] zidx = particles.zidx
@@ -225,7 +230,7 @@ cdef void _rk2_step_2(Particles particles, Scalars scalars, FieldData fielddata)
             )
             
 
-cdef void _rk2_update(Particles particles, Scalars scalars, FieldData fieldata):
+cdef void _rk2_update(particles, scalars, fieldata):
     # unpack required particle fields
     cdef unsigned char status[::1] = particles.status
     cdef double[::1] zidx = particles.zidx
@@ -288,3 +293,113 @@ cdef void _rk2_update(Particles particles, Scalars scalars, FieldData fieldata):
             )
             cdef double S_value = S_from_z(z[i], h_value, zeta_value)
             zidx[i] = compute_zidx_from_S(S_value, hc, NZ, h_value, zeta_value, C_array, C_offz)
+
+# define python wrappers
+cpdef rk2_step_1(particles, scalars, fielddata):
+    """First step of RK2 with ROMS w advection."""
+    _rk2_step_1(particles, scalars, fielddata)
+
+cpdef rk2_step_2(particles, scalars, fielddata):
+    """Second step of RK2 with ROMS w advection."""
+    _rk2_step_2(particles, scalars, fielddata)
+
+cpdef rk2_update(particles, scalars, fielddata):
+    """Update step of RK2 with ROMS w advection."""
+    _rk2_update(particles, scalars, fielddata)
+
+# define kernels
+rk2_step_1_kernel = ParticleKernel(
+    rk2_step_1,
+    particle_fields={
+        "status": np.uint8
+        "zidx": np.float64, 
+        "yidx": np.float64, 
+        "xidx": np.float64, 
+        "z": np.float64, 
+        "_dxidx1": np.float64, 
+        "_dyidx1": np.float64, 
+        "_dz1": np.float64
+    },
+    scalars={
+        "hc": np.float64, 
+        "NZ": np.int32
+    },
+    simulation_fields=[
+        "u",
+        "v",
+        "w",
+        "dx",
+        "dy",
+        "h",
+        "C",
+        "zeta",
+    ],
+)
+rk2_step_2_kernel = ParticleKernel(
+    rk2_step_2,
+    particle_fields={
+        "status": np.uint8
+        "zidx": np.float64, 
+        "yidx": np.float64, 
+        "xidx": np.float64, 
+        "z": np.float64, 
+        "_dxidx1": np.float64, 
+        "_dyidx1": np.float64, 
+        "_dz1": np.float64,
+        "_dxidx2": np.float64, 
+        "_dyidx2": np.float64, 
+        "_dz2": np.float64
+    },
+    scalars={
+        "_dt": np.float64,
+        "_RK2_alpha": np.float64,
+        "hc": np.float64, 
+        "NZ": np.int32
+    },
+    simulation_fields=[
+        "u",
+        "v",
+        "w",
+        "dx",
+        "dy",
+        "h",
+        "C",
+        "zeta",
+    ],
+)
+rk2_update_kernel = ParticleKernel(
+    rk2_update,
+    particle_fields={
+        "status": np.uint8
+        "zidx": np.float64, 
+        "yidx": np.float64, 
+        "xidx": np.float64, 
+        "z": np.float64, 
+        "_dxidx1": np.float64, 
+        "_dyidx1": np.float64, 
+        "_dz1": np.float64,
+        "_dxidx2": np.float64, 
+        "_dyidx2": np.float64, 
+        "_dz2": np.float64
+    },
+    scalars={
+        "_dt": np.float64,
+        "_RK2_alpha": np.float64,
+        "hc": np.float64, 
+        "NZ": np.int32
+    },
+    simulation_fields=[
+        "h",
+        "C",
+        "zeta",
+    ],
+)
+
+# define time stepper
+"""Create an RK2 timesteppers with the ROMS w advection kernels."""
+rk2_timestepper = functools.partial(
+    RK2Timestepper,
+    rk_step_1_kernel=rk2_step_1_kernel,
+    rk_step_2_kernel=rk2_step_2_kernel,
+    rk_update_kernel=rk2_update_kernel,
+)

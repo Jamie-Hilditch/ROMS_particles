@@ -36,9 +36,7 @@ class Launcher:
 
         # register constants attached to fieldset as scalar data sources
         for name, value in self._fieldset.constants.items():
-            self.register_scalar_data_source(
-                name, lambda time_index: value
-            )
+            self.register_scalar_data_source(name, lambda time_index: value)
 
     def register_scalar_data_source(self, name: str, func: ScalarDataSource) -> None:
         """Register a scalar data source function."""
@@ -134,16 +132,14 @@ class Launcher:
         kernel_arguments = []
         # scalars go first
         for name in kernel.scalars:
-            kernel_arguments.append(
-                self._scalar_data_sources[name](time_index)
-            )
+            kernel_arguments.append(self._scalar_data_sources[name](time_index))
         # then fields
         bbox = self.construct_bbox(particles)
         for name in kernel.simulation_fields:
             array, offsets = self.get_field_data(name, time_index, bbox)
             kernel_arguments.append(array)
             kernel_arguments.append(offsets)
-       
+
         # call the vectorized kernel function
         kernel._vector_kernel_function(particles, *kernel_arguments)
 

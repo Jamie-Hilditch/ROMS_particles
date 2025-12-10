@@ -6,18 +6,18 @@ import numpy.typing as npt
 from ..particle_kernel import ParticleKernel
 
 
-def _finite_indices(
-    particles: npt.NDArray,
-    pidx: int
-) -> None:
+def _finite_indices(particles: npt.NDArray, pidx: int) -> None:
     """Kernel to check if particle positions are finite."""
     if (
         not np.isfinite(particles["zidx"][pidx])
         or not np.isfinite(particles["yidx"][pidx])
         or not np.isfinite(particles["xidx"][pidx])
     ):
-        particles["status"][pidx] = 1 # Mark particle as inactive if any position is not finite
-        
+        particles["status"][pidx] = (
+            1  # Mark particle as inactive if any position is not finite
+        )
+
+
 finite_indices_kernel = ParticleKernel(
     _finite_indices,
     particle_fields={
@@ -28,8 +28,9 @@ finite_indices_kernel = ParticleKernel(
     },
     scalars=(),
     simulation_fields=[],
-    fastmath=False
+    fastmath=False,
 )
+
 
 def _inbounds(
     particles: npt.NDArray,
@@ -50,8 +51,11 @@ def _inbounds(
         or particles["xidx"][pidx] < xidx_min
         or particles["xidx"][pidx] > xidx_max
     ):
-        particles["status"][pidx] = 2 # Mark particle as inactive if any index is out of bounds
-        
+        particles["status"][pidx] = (
+            2  # Mark particle as inactive if any index is out of bounds
+        )
+
+
 inbounds_kernel = ParticleKernel(
     _inbounds,
     particle_fields={
@@ -65,4 +69,5 @@ inbounds_kernel = ParticleKernel(
 )
 
 validate_indices_kernel = ParticleKernel.from_sequence(
-    [finite_indices_kernel, inbounds_kernel])
+    [finite_indices_kernel, inbounds_kernel]
+)

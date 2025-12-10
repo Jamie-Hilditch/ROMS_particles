@@ -19,6 +19,7 @@ def sigma_coordinate(zidx: float, Nz: int) -> float:
     """
     return (zidx + 0.5) / Nz - 1.0
 
+
 @numba.njit(nogil=True, fastmath=True)
 def S_coordinate(hc: float, sigma: float, h: float, C: float) -> float:
     """Compute the S-coordinate transformation for ROMS vertical coordinates.
@@ -63,6 +64,7 @@ def S_from_z(z: float, h: float, zeta: float) -> float:
     """
     return (z - zeta) / (zeta + h)
 
+
 @numba.njit(nogil=True, fastmath=True)
 def compute_zidx_from_S(
     S: float,
@@ -94,5 +96,5 @@ def compute_zidx_from_S(
     else:
         Sidx = unsafe_inverse_linear_interpolation(S_array, S)
     zidx = Sidx - C_offset
-    
+
     return zidx

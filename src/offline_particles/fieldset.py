@@ -123,11 +123,10 @@ class Fieldset:
             return
         if name in self._fields:
             del self._fields[name]
-            return 
+            return
         raise KeyError(f"Field '{name}' does not exist in Fieldset. Cannot remove.")
 
         del self._fields[name]
-
 
     def __getitem__(self, name: str) -> Field:
         """Get a field from the fieldset.
@@ -139,7 +138,6 @@ class Fieldset:
         if name in self._fields:
             return self._fields[name]
         raise KeyError(f"Field '{name}' does not exist in Fieldset.")
-        
 
     def __contains__(self, name: str) -> bool:
         """Check if a field exists in the fieldset.

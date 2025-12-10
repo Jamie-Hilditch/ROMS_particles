@@ -32,7 +32,7 @@ def _rk2_step_1(
     pidx: int,
     hc: float,
     NZ: int,
-    u: npt.NDArray[float], 
+    u: npt.NDArray[float],
     u_off: npt.NDArray[float],
     v: npt.NDArray[float],
     v_off: npt.NDArray[float],
@@ -55,10 +55,10 @@ def _rk2_step_1(
     yidx = particles["yidx"][pidx]
     xidx = particles["xidx"][pidx]
 
-    # compute z at current time 
+    # compute z at current time
     h_idx = offset_indices_2D(yidx, xidx, h_off)
     C_idx = offset_indices_1D(zidx, C_off)
-    zeta_idx = offset_indices_2D(yidx, xidx, zeta_off)   
+    zeta_idx = offset_indices_2D(yidx, xidx, zeta_off)
     h_value = bilinear_interpolation(h_idx, h)
     C_value = linear_interpolation(C_idx, C)
     zeta_value = bilinear_interpolation(zeta_idx, zeta)
@@ -89,18 +89,17 @@ def _rk2_step_1(
     w_interp = trilinear_interpolation(w_idx, w)
     particles["_dz1"][pidx] = w_interp
 
-    
 
 rk2_step_1_kernel = ParticleKernel(
     _rk2_step_1,
     particle_fields={
-        "zidx": float, 
-        "yidx": float, 
-        "xidx": float, 
-        "z": float, 
-        "_dxidx1": float, 
-        "_dyidx1": float, 
-        "_dz1" :float
+        "zidx": float,
+        "yidx": float,
+        "xidx": float,
+        "z": float,
+        "_dxidx1": float,
+        "_dyidx1": float,
+        "_dz1": float,
     },
     scalars=("hc", "NZ"),
     simulation_fields=[
@@ -123,7 +122,7 @@ def _rk2_step_2(
     alpha: float,
     hc: float,
     NZ: int,
-    u: npt.NDArray[float], 
+    u: npt.NDArray[float],
     u_off: npt.NDArray[float],
     v: npt.NDArray[float],
     v_off: npt.NDArray[float],
@@ -142,22 +141,22 @@ def _rk2_step_2(
 ) -> None:
     """Second rk2 step."""
 
-    # intermediate z position 
+    # intermediate z position
     z = particles["z"][pidx] + particles["_dz1"][pidx] * dt * alpha
 
     # intermediate xidx, yidx positions
     xidx = particles["xidx"][pidx] + particles["_dxidx1"][pidx] * dt * alpha
     yidx = particles["yidx"][pidx] + particles["_dyidx1"][pidx] * dt * alpha
 
-    # intermediate zidx value 
+    # intermediate zidx value
     h_idx = offset_indices_2D(yidx, xidx, h_off)
     zeta_idx = offset_indices_2D(yidx, xidx, zeta_off)
     h_value = bilinear_interpolation(h_idx, h)
     zeta_value = bilinear_interpolation(zeta_idx, zeta)
-    
+
     S = S_from_z(z, h_value, zeta_value)
     zidx = compute_zidx_from_S(S, hc, NZ, h_value, zeta_value, C, C_off)
-    
+
     # horizontal advection in index space
     # offset indices for u, v, dx, dy
     u_idx = offset_indices_3D(zidx, yidx, xidx, u_off)
@@ -180,10 +179,11 @@ def _rk2_step_2(
     w_interp = trilinear_interpolation(w_idx, w)
     particles["_dz2"][pidx] = w_interp
 
+
 rk2_step_2_kernel = ParticleKernel(
     _rk2_step_2,
     particle_fields={
-        "zidx": float, 
+        "zidx": float,
         "yidx": float,
         "xidx": float,
         "z": float,
@@ -204,6 +204,7 @@ rk2_step_2_kernel = ParticleKernel(
     ],
 )
 
+
 def _rk2_update(
     particles: npt.NDArray,
     pidx: int,
@@ -223,13 +224,25 @@ def _rk2_update(
     b2 = 1.0 / (2.0 * alpha)
 
     # update horizontal indices
-    xidx = particles["xidx"][pidx] + b1 * dt * particles["_dxidx1"][pidx] + b2 * dt * particles["_dxidx2"][pidx]
-    yidx = particles["yidx"][pidx] + b1 * dt * particles["_dyidx1"][pidx] + b2 * dt * particles["_dyidx2"][pidx]
+    xidx = (
+        particles["xidx"][pidx]
+        + b1 * dt * particles["_dxidx1"][pidx]
+        + b2 * dt * particles["_dxidx2"][pidx]
+    )
+    yidx = (
+        particles["yidx"][pidx]
+        + b1 * dt * particles["_dyidx1"][pidx]
+        + b2 * dt * particles["_dyidx2"][pidx]
+    )
     particles["xidx"][pidx] = xidx
     particles["yidx"][pidx] = yidx
 
     # update vertical position
-    z = particles["z"][pidx] + b1 * dt * particles["_dz1"][pidx] + b2 * dt * particles["_dz2"][pidx]
+    z = (
+        particles["z"][pidx]
+        + b1 * dt * particles["_dz1"][pidx]
+        + b2 * dt * particles["_dz2"][pidx]
+    )
     particles["z"][pidx] = z
 
     # compute new zidx from updated z
@@ -237,9 +250,12 @@ def _rk2_update(
     zeta_idx = offset_indices_2D(yidx, xidx, zeta_off)
     h_value = bilinear_interpolation(h_idx, h)
     zeta_value = bilinear_interpolation(zeta_idx, zeta)
-    
+
     S = S_from_z(z, h_value, zeta_value)
-    particles["zidx"][pidx] = compute_zidx_from_S(S, hc, NZ, h_value, zeta_value, C, C_off)
+    particles["zidx"][pidx] = compute_zidx_from_S(
+        S, hc, NZ, h_value, zeta_value, C, C_off
+    )
+
 
 rk2_update_kernel = ParticleKernel(
     _rk2_update,
@@ -253,7 +269,7 @@ rk2_update_kernel = ParticleKernel(
         "_dz1": float,
         "_dxidx2": float,
         "_dyidx2": float,
-        "_dz2": float
+        "_dz2": float,
     },
     scalars=("_dt", "_RK2_alpha", "hc", "NZ"),
     simulation_fields=[

@@ -149,11 +149,15 @@ class RK2Timestepper(Timestepper):
             post = (self._post_step_kernel,)
         else:
             post = ()
-        return pre + (
-            self._rk_step_1_kernel,
-            self._rk_step_2_kernel,
-            self._rk_update_kernel,
-        ) + post
+        return (
+            pre
+            + (
+                self._rk_step_1_kernel,
+                self._rk_step_2_kernel,
+                self._rk_update_kernel,
+            )
+            + post
+        )
 
     def timestep_particles(self, particles: npt.NDArray, launcher: Launcher) -> None:
         """Launch the RK2 kernels to timestep the particles."""

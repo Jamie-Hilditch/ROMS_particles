@@ -10,6 +10,7 @@ from .spatial_arrays import BBox, ChunkedDaskArray, NumpyArray, SpatialArray, St
 
 type FieldData = tuple[npt.NDArray[float], npt.NDArray[float]]
 
+
 class Field(abc.ABC):
     """Abstract base class for fields used in particle tracking."""
 
@@ -221,6 +222,7 @@ class StaticField(Field):
 type SpatialArrayFactory = Callable[
     [da.Array | npt.NDArray, Stagger, Stagger, Stagger], SpatialArray
 ]
+
 
 class TimeDependentField(Field):
     """Class representing a time-dependent field with an least 1 spatial dimension."""

@@ -175,7 +175,7 @@ class SimulationBuilder:
         self._timestepper = timestepper
         self._fieldset = fieldset
         self._zidx_bounds = zidx_bounds
-        self._yidx_bounds = yidx_bounds 
+        self._yidx_bounds = yidx_bounds
         self._xidx_bounds = xidx_bounds
 
         # tasks

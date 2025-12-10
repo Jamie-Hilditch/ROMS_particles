@@ -16,6 +16,7 @@ DEFAULT_PARTICLE_FIELDS: dict[str, npt.DTypeLike] = {
     "xidx": np.float64,
 }
 
+
 class ParticleKernel:
     """A kernel to be executed on a particle."""
 
@@ -31,7 +32,9 @@ class ParticleKernel:
         parallel: bool = True,
         debug: bool = False,
     ) -> None:
-        self._kernel_function = numba.njit(nogil=nogil, fastmath=fastmath, debug=debug)(kernel_function)
+        self._kernel_function = numba.njit(nogil=nogil, fastmath=fastmath, debug=debug)(
+            kernel_function
+        )
         self._particle_fields = {
             field: np.dtype(dtype) for field, dtype in particle_fields.items()
         }
@@ -42,7 +45,11 @@ class ParticleKernel:
         self._parallel = parallel
         self._debug = debug
         self._vector_kernel_function = _vectorize_kernel_function(
-            self._kernel_function, fastmath=fastmath, nogil=nogil, parallel=parallel, debug=debug
+            self._kernel_function,
+            fastmath=fastmath,
+            nogil=nogil,
+            parallel=parallel,
+            debug=debug,
         )
 
     @property
@@ -78,9 +85,7 @@ class ParticleKernel:
     def chain_with(self, other: Self) -> Self:
         """Create a ParticleKernel by chaining this kernel with another."""
 
-        combined_particle_fields = merge_particle_fields(
-            [self, other]
-        )
+        combined_particle_fields = merge_particle_fields([self, other])
         combined_scalars = tuple(set(self.scalars).union(other.scalars))
         combined_simulation_fields = tuple(
             set(self.simulation_fields).union(other.simulation_fields)

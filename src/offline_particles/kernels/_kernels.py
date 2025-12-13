@@ -8,7 +8,9 @@ import numpy.typing as npt
 
 from ..fields import FieldData
 
-type KernelFunction = Callable[[NamedTuple, dict[str, npt.NDArray], dict[str, FieldData]], None]
+type KernelFunction = Callable[
+    [NamedTuple, dict[str, npt.NDArray], dict[str, FieldData]], None
+]
 
 DEFAULT_PARTICLE_FIELDS: dict[str, npt.DTypeLike] = {
     "status": np.uint8,
@@ -17,12 +19,13 @@ DEFAULT_PARTICLE_FIELDS: dict[str, npt.DTypeLike] = {
     "xidx": np.float64,
 }
 
+
 class ParticleKernel:
     """A kernel to be execute on particles."""
 
     def __init__(
-        self, 
-        fn: KernelFunction | Iterable[KernelFunction], 
+        self,
+        fn: KernelFunction | Iterable[KernelFunction],
         particle_fields: dict[str, npt.DTypeLike],
         scalars: dict[str, npt.DTypeLike],
         simulation_fields: Iterable[str],
@@ -35,13 +38,11 @@ class ParticleKernel:
             if not all(callable(f) for f in funcs):
                 raise TypeError("All kernel functions must be callable")
             self._funcs = funcs
-        
+
         self._particle_fields = {
             field: np.dtype(dtype) for field, dtype in particle_fields.items()
         }
-        self._scalars = {
-            scalar: np.dtype(dtype) for scalar, dtype in scalars.items()
-        }
+        self._scalars = {scalar: np.dtype(dtype) for scalar, dtype in scalars.items()}
         self._simulation_fields = frozenset(simulation_fields)
 
     @property
@@ -81,24 +82,22 @@ class ParticleKernel:
         )
 
     def __str__(self) -> str:
-        return "Particle Kernel: " + " → ".join(self.func_name(fn) for fn in self._funcs)
-
+        return "Particle Kernel: " + " → ".join(
+            self.func_name(fn) for fn in self._funcs
+        )
 
     def __call__(
-        self, 
-        particles: NamedTuple, 
-        scalars: dict[str, npt.NDArray], 
-        fielddata: dict[str, FieldData]
+        self,
+        particles: NamedTuple,
+        scalars: dict[str, npt.NDArray],
+        fielddata: dict[str, FieldData],
     ) -> None:
         """Execute the kernel on the given particles."""
         for fn in self._funcs:
             fn(particles, scalars, fielddata)
 
-    @classmethod 
-    def chain(
-        cls,
-        *kernels: Self
-    ) -> Self:
+    @classmethod
+    def chain(cls, *kernels: Self) -> Self:
         """Create a ParticleKernel by merging multiple kernels."""
         funcs = tuple(fn for kernel in kernels for fn in kernel._funcs)
         particle_fields = _merge_particle_fields(kernels)
@@ -116,9 +115,8 @@ class ParticleKernel:
         """Chain this kernel with other kernels."""
         return ParticleKernel.chain(self, *others)
 
-def _merge_particle_fields(
-    kernels: Iterable[ParticleKernel]
-) -> dict[str, np.dtype]:
+
+def _merge_particle_fields(kernels: Iterable[ParticleKernel]) -> dict[str, np.dtype]:
     """Merge particle fields from multiple kernels."""
     merged_fields: dict[str, np.dtype] = DEFAULT_PARTICLE_FIELDS.copy()
     for kernel in kernels:
@@ -133,9 +131,8 @@ def _merge_particle_fields(
                 merged_fields[field] = dtype
     return merged_fields
 
-def _merge_scalars(
-    kernels: Iterable[ParticleKernel]
-) -> dict[str, np.dtype]:
+
+def _merge_scalars(kernels: Iterable[ParticleKernel]) -> dict[str, np.dtype]:
     """Merge scalar fields from multiple kernels."""
     merged_scalars: dict[str, np.dtype] = {}
     for kernel in kernels:
@@ -151,9 +148,8 @@ def _merge_scalars(
 
     return merged_scalars
 
-def _merge_simulation_fields(
-    kernels: Iterable[ParticleKernel]
-) -> frozenset[str]:
+
+def _merge_simulation_fields(kernels: Iterable[ParticleKernel]) -> frozenset[str]:
     """Merge simulation fields from multiple kernels."""
     merged_fields: set[str] = set()
     for kernel in kernels:

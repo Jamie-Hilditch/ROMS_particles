@@ -7,7 +7,6 @@ import itertools
 from typing import Self
 
 import dask.array as da
-import numba
 import numpy as np
 import numpy.typing as npt
 
@@ -275,8 +274,7 @@ class ChunkedDaskArray(SpatialArray):
             for db, offset, bounds in zip(active_bbox, active_offsets, self._bounds)
         )
         new_offsets = tuple(
-            offset - lb
-            for offset, (lb, _) in zip(active_offsets, new_bounds)
+            offset - lb for offset, (lb, _) in zip(active_offsets, new_bounds)
         )
 
         # if new bounds don't match existing update and load new subset
@@ -298,6 +296,7 @@ def _compute_new_bounds(
     new_lower = compute_new_lower_bound(dim_min, offset, bounds)
     new_upper = compute_new_upper_bound(dim_max, offset, bounds)
     return new_lower, new_upper
+
 
 def compute_new_lower_bound(
     dim_min: float,

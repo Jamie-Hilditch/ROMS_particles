@@ -1,15 +1,15 @@
 """Submodule for handling fields in ROMS particle tracking simulations."""
 
 import abc
-from typing import Callable
+import collections.namedtuple
+from typing import Callable, NamedTuple
 
 import dask.array as da
 import numpy.typing as npt
 
 from .spatial_arrays import BBox, ChunkedDaskArray, NumpyArray, SpatialArray, Stagger
 
-type FieldData = tuple[npt.NDArray[float], npt.NDArray[float]]
-
+FieldData: NamedTuple[npt.NDArray, tuple[float, ...]] = collections.namedtuple("FieldData", ["array", "offsets"])
 
 class Field(abc.ABC):
     """Abstract base class for fields used in particle tracking."""
@@ -106,7 +106,7 @@ class Field(abc.ABC):
         Returns
         -------
         FieldData
-            Tuple containing the field data array and offsets.
+            Namedtuple containing the field data array and offsets.
         """
         pass
 
@@ -179,10 +179,11 @@ class StaticField(Field):
         Returns
         -------
         FieldData
-            Tuple containing the field data array and offsets.
+            Namedtuple containing the field data array and offsets.
         """
         # For static fields, we ignore time_index
-        return self._data.get_data_subset(bbox)
+        array, offsets = self._data.get_data_subset(bbox)
+        return FieldData(array, offsets)
 
     @classmethod
     def from_numpy(
@@ -363,7 +364,7 @@ class TimeDependentField(Field):
         Returns
         -------
         FieldData
-            Tuple containing the field data array and offsets.
+            Namedtuple containing the field data array and offsets.
         """
         It, ft = divmod(time_index, 1)
         It = int(It)
@@ -376,8 +377,8 @@ class TimeDependentField(Field):
         next_data, _ = self._next_time_slice.get_data_subset(bbox)
 
         # linear interpolation in time
-        data_array = current_data * (1.0 - ft) + next_data * ft
-        return data_array, offsets
+        array = current_data * (1.0 - ft) + next_data * ft
+        return FieldData(array, offsets)
 
     @classmethod
     def from_numpy(

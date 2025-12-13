@@ -212,7 +212,7 @@ class NumpyArray(SpatialArray):
             This accounts for both the grid staggering and any subsetting of the data array.
         """
         # Here all the data is in memory so we can just return the full data array and the indices unchanged
-        return self._data, np.array(self.active_offsets, dtype=float)
+        return self._data, self.active_offsets
 
 
 class ChunkedDaskArray(SpatialArray):
@@ -233,10 +233,9 @@ class ChunkedDaskArray(SpatialArray):
         self._bounds = tuple(
             np.cumulative_sum(chunk, include_initial=True) for chunk in self._chunks
         )
+        # placeholders for array and bounds of current subset
         self._subset: npt.NDArray[float] | None = None  # type: ignore[call-arg]
-        # initialise lower and upper bounds to larger and smaller than possible values
-        self._subset_lower_bounds = np.empty((self._ndim,), dtype=int)
-        self._subset_upper_bounds = np.empty((self._ndim,), dtype=int)
+        self._subset_bounds: tuple[tuple[int, int], ...] | None = None
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -246,7 +245,7 @@ class ChunkedDaskArray(SpatialArray):
     def get_data_subset(
         self,
         bounding_box: BBox,
-    ) -> tuple[npt.NDArray[float], npt.NDArray[float]]:
+    ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
@@ -263,73 +262,43 @@ class ChunkedDaskArray(SpatialArray):
             Offsets to apply to the active particle indices in order to index into the returned data.
             This accounts for both the grid staggering and any subsetting of the data array.
         """
-        active_dims_bbox = tuple(
+        # loop through active dimensions and compute new bounds
+        batched_bbox = itertools.batched(bounding_box, 2)
+        active_bbox = tuple(
             dim_bounds
-            for dim_bounds, is_active in zip(
-                itertools.batched(bounding_box, 2), self.dmask
-            )
+            for dim_bounds, is_active in zip(batched_bbox, self.dmask)
             if is_active
         )
-
-        recompute, offsets = compute_new_bounds(
-            active_dims_bbox,
-            self.active_offsets,
-            self._subset_lower_bounds,
-            self._subset_upper_bounds,
-            self._bounds,
+        active_offsets = self.active_offsets
+        new_bounds = tuple(
+            _compute_new_bounds(db, offset, bounds)
+            for db, offset, bounds in zip(active_bbox, active_offsets, self._bounds)
+        )
+        new_offsets = tuple(
+            offset - lb
+            for offset, (lb, _) in zip(active_offsets, new_bounds)
         )
 
-        if recompute:
-            subset_slices = tuple(
-                slice(self._subset_lower_bounds[dim], self._subset_upper_bounds[dim])
-                for dim in range(self._ndim)
-            )
+        # if new bounds don't match existing update and load new subset
+        if self._subset_bounds != new_bounds:
+            self._subset_bounds = new_bounds
+            subset_slices = tuple(slice(*bounds) for bounds in new_bounds)
             self._subset = self._data[subset_slices].compute()
 
-        return self._subset, offsets
+        return self._subset, new_offsets
 
 
-@numba.jit(nogil=True, fastmath=True)
-def compute_new_bounds(
-    active_dims_bbox: tuple[tuple[float, float], ...],
-    offsets: tuple[float, ...],
-    lower: npt.NDArray[int],
-    upper: npt.NDArray[int],
-    bounds: tuple[npt.NDArray[int], ...],
-) -> tuple[bool, npt.NDArray[float]]:
+def _compute_new_bounds(
+    dim_bounds: tuple[float, float], offset: float, bounds: npt.NDArray[int]
+) -> tuple[int, int]:
     """
-    Compute new bounds for chunked data access.
-    Parameters:
-        active_dims_bbox: tuple of (min, max) tuples defining the bounding box for each active dimensions.
-        offsets: tuple of offsets to apply to the indices.
-        lower: lower bounds for each dimension - modified inplace.
-        upper: upper bounds for each dimension - modified inplace.
-        bounds: tuple of arrays containing the chunk boundaries for each dimension.
-    Returns:
-        - bool: whether the bounds have changed.
-        - tuple[float, ...]: offsets applied to the particle indices in order to index into the returned data.
+    Compute new dimension bounds for chunked data access.
     """
-    recompute = False
-    M = len(active_dims_bbox)
-    new_offsets = np.empty((M,), dtype=float)
+    dim_min, dim_max = dim_bounds
+    new_lower = compute_new_lower_bound(dim_min, offset, bounds)
+    new_upper = compute_new_upper_bound(dim_max, offset, bounds)
+    return new_lower, new_upper
 
-    for m in range(M):
-        offset = offsets[m]
-        dim_min, dim_max = active_dims_bbox[m]
-        new_lower = compute_new_lower_bound(dim_min, offset, bounds[m])
-        new_upper = compute_new_upper_bound(dim_max, offset, bounds[m])
-
-        new_offsets[m] = offset - new_lower
-
-        if new_lower != lower[m] or new_upper != upper[m]:
-            recompute = True
-            lower[m] = new_lower
-            upper[m] = new_upper
-
-    return recompute, new_offsets
-
-
-@numba.jit(nogil=True, fastmath=True)
 def compute_new_lower_bound(
     dim_min: float,
     offset: float,
@@ -347,12 +316,11 @@ def compute_new_lower_bound(
     global_lower = dim_min + offset
 
     # clamp to chunk boundaries
-    lower_bound = _lower_chunk_bound(global_lower, bounds)
+    idx = np.searchsorted(bounds, global_lower, side="right") - 1
+    idx = max(0, idx)
+    return bounds[idx]
 
-    return lower_bound
 
-
-@numba.njit(nogil=True, fastmath=True)
 def compute_new_upper_bound(
     dim_max: float,
     offset: float,
@@ -370,22 +338,6 @@ def compute_new_upper_bound(
     global_upper = dim_max + offset + 1  # add 1 for upper bound
 
     # clamp to chunk boundaries
-    upper_bound = _upper_chunk_bound(global_upper, bounds)
-    return upper_bound
-
-
-# numba functions for chunk indexing
-@numba.njit(nogil=True, fastmath=True)
-def _lower_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
-    """Get the bound of a chunk satisfying b <= global_idx."""
-    idx = np.searchsorted(bounds, global_idx, side="right") - 1
-    idx = max(0, idx)
-    return bounds[idx]
-
-
-@numba.njit(nogil=True, fastmath=True)
-def _upper_chunk_bound(global_idx: float, bounds: npt.NDArray[int]) -> int:
-    """Get the bound of a chunk satisfying b >= global_idx."""
-    idx = np.searchsorted(bounds, global_idx, side="left")
+    idx = np.searchsorted(bounds, global_upper, side="left")
     idx = min(len(bounds) - 1, idx)
     return bounds[idx]

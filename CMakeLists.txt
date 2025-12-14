@@ -66,4 +66,9 @@ foreach(module_name pyx_file IN ZIP_LISTS KERNEL_MODULES KERNEL_PYX_FILES)
         ${c_file}
     )
 
+    install(
+        TARGETS ${module_name}
+        LIBRARY DESTINATION .
+    )
+
 endforeach()

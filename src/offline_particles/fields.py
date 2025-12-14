@@ -9,9 +9,7 @@ import numpy.typing as npt
 
 from .spatial_arrays import BBox, ChunkedDaskArray, NumpyArray, SpatialArray, Stagger
 
-FieldData = collections.namedtuple(
-    "FieldData", ["array", "offsets"]
-)
+FieldData = collections.namedtuple("FieldData", ["array", "offsets"])
 
 
 class Field(abc.ABC):

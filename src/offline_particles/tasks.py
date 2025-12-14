@@ -6,8 +6,8 @@ from typing import Iterable
 
 import numpy as np
 
-from .launcher import Launcher
 from .kernels import ParticleKernel
+from .launcher import Launcher
 
 
 @dataclasses.dataclass(frozen=True)

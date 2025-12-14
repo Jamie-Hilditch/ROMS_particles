@@ -1,7 +1,5 @@
 """Submodule defining the top-level particle simulation class."""
 
-
-
 from .fieldset import Fieldset
 from .kernels import merge_particle_fields
 from .launcher import Launcher

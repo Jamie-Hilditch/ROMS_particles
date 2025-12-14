@@ -7,7 +7,7 @@ import numpy.typing as npt
 
 from .fields import FieldData
 from .fieldset import Fieldset
-from .particle_kernel import ParticleKernel
+from .kernels import ParticleKernel
 from .spatial_arrays import BBox
 
 type ScalarDataSource = Callable[[float], Number]

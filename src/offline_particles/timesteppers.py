@@ -7,7 +7,7 @@ import numpy.typing as npt
 
 from .kernel_tools import unsafe_inverse_linear_interpolation
 from .launcher import Launcher, register_scalar_data_source
-from .particle_kernel import ParticleKernel
+from .kernels import ParticleKernel
 
 
 class Timestepper(abc.ABC):

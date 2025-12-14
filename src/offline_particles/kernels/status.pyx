@@ -3,6 +3,8 @@
 from cython.parallel cimport prange
 from libc.math cimport isfinite
 
+import numpy as np
+
 from ._kernels import ParticleKernel
 
 # expose python objects as public API

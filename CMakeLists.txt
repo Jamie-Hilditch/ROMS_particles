@@ -9,8 +9,11 @@ find_program(CYTHON_EXECUTABLE cython REQUIRED)
 # Define inputs
 # ------------------------------------------------------------
 
-# Declare kernel modules
-include(cmake/kernels.cmake)
+# Declare extension modules
+set(EXTENSION_MODULES
+    kernels.status
+    kernels.roms.rk2_w_advection
+)
 
 # Cython compilation arguments
 set(CYTHON_ARGS -3 -X boundscheck=False)
@@ -19,33 +22,24 @@ set(CYTHON_ARGS -3 -X boundscheck=False)
 # end inputs
 # ------------------------------------------------------------
 
-# ------------------------------------------------------------
-# Check required variables
-# -----------------------------------------------------------
-
-if(NOT DEFINED KERNEL_MODULES OR NOT DEFINED KERNEL_PYX_FILES)
-    message(FATAL_ERROR
-        "KERNEL_MODULES and KERNEL_PYX_FILES must be defined"
-    )
-endif()
-
-list(LENGTH KERNEL_MODULES _n_mods)
-list(LENGTH KERNEL_PYX_FILES _n_pyx)
-
-if(NOT _n_mods EQUAL _n_pyx)
-    message(FATAL_ERROR
-        "KERNEL_MODULES and KERNEL_PYX_FILES must have same length"
-    )
-endif()
 
 # ------------------------------------------------------------
 # Build each kernel module
 # ------------------------------------------------------------
 
-foreach(module_name pyx_file IN ZIP_LISTS KERNEL_MODULES KERNEL_PYX_FILES)
+foreach(module IN LISTS EXTENSION_MODULES)
+    # extract module name
+    string(REGEX REPLACE ".*\\.([^.]+)$" "\\1" module_name ${module})
 
-    get_filename_component(mod_basename ${pyx_file} NAME_WE)
-    set(c_file "${CMAKE_CURRENT_BINARY_DIR}/${mod_basename}.c")
+    # extract module directory relative to package root
+    string(REGEX REPLACE "\\.[^.]+$" "" parent ${module})
+    string(REPLACE "." "/" module_dir ${parent})
+
+    # compilation paths
+    set(c_dir "${CMAKE_CURRENT_BINARY_DIR}/${module_dir}")
+    file(MAKE_DIRECTORY ${c_dir})
+    set(c_file "${c_dir}/${module_name}.c")
+    set(pyx_file "${CMAKE_CURRENT_SOURCE_DIR}/src/offline_particles/${module_dir}/${module_name}.pyx")
 
     # Generate C from Cython
     add_custom_command(
@@ -59,16 +53,16 @@ foreach(module_name pyx_file IN ZIP_LISTS KERNEL_MODULES KERNEL_PYX_FILES)
         VERBATIM
     )
 
-    # Build Python extension module
-    python_add_library(${module_name}
-        MODULE
-        WITH_SOABI
-        ${c_file}
-    )
+    # unique CMake target name
+    string(REPLACE "." "__" target_name ${module})
 
+    python_add_library(${target_name} MODULE ${c_file})
+    set_target_properties(${target_name} PROPERTIES OUTPUT_NAME ${module_name}${Python_SOABI_SUFFIX})
+
+    # install
     install(
-        TARGETS ${module_name}
-        LIBRARY DESTINATION .
+        TARGETS ${target_name}
+        LIBRARY DESTINATION "offline_particles/${module_dir}"
     )
 
 endforeach()

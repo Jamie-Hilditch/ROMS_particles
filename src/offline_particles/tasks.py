@@ -7,7 +7,7 @@ from typing import Iterable
 import numpy as np
 
 from .launcher import Launcher
-from .particle_kernel import ParticleKernel
+from .kernels import ParticleKernel
 
 
 @dataclasses.dataclass(frozen=True)

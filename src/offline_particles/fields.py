@@ -1,15 +1,15 @@
 """Submodule for handling fields in ROMS particle tracking simulations."""
 
 import abc
-import collections.namedtuple
-from typing import Callable, NamedTuple
+import collections
+from typing import Callable
 
 import dask.array as da
 import numpy.typing as npt
 
 from .spatial_arrays import BBox, ChunkedDaskArray, NumpyArray, SpatialArray, Stagger
 
-FieldData: NamedTuple[npt.NDArray, tuple[float, ...]] = collections.namedtuple(
+FieldData = collections.namedtuple(
     "FieldData", ["array", "offsets"]
 )
 

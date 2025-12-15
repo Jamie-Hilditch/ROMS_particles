@@ -35,6 +35,8 @@ class Particles:
     def __getattr__(self, name: str) -> npt.NDArray:
         if name in self._arrays:
             return self._arrays[name]
+        elif name.startswith("_"):
+            return super().__getattribute__(name)
         raise AttributeError(f"'Particles' object has no attribute '{name}'")
 
     def __getitem__(self, name: str) -> npt.NDArray:

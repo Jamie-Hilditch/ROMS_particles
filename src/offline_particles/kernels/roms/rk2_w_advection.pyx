@@ -14,7 +14,7 @@ from ._vertical_coordinate cimport compute_z, compute_zidx
 
 import functools
 
-from ._kernels import ParticleKernel
+from .._kernels import ParticleKernel
 from ...timesteppers import RK2Timestepper
 
 

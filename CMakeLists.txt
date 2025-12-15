@@ -50,7 +50,7 @@ foreach(module IN LISTS EXTENSION_MODULES)
                 -o ${c_file}
                 ${pyx_file}
         DEPENDS ${pyx_file}
-        COMMENT "Cythonizing ${module_name}"
+        COMMENT "Cythonizing ${module}"
         VERBATIM
     )
 

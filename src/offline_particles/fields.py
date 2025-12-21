@@ -382,7 +382,7 @@ class TimeDependentField(Field):
         # linear interpolation in time
         if self._array.shape != current_data.shape:
             self._array = np.empty_like(current_data)
-        np.multiply(current_data, 1.0 - ft, out=self._working_array)
+        np.multiply(current_data, 1.0 - ft, out=self._array)
         self._array += next_data * ft
         return FieldData(self._working_array, offsets)
 

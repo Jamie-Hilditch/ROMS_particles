@@ -384,7 +384,7 @@ class TimeDependentField(Field):
             self._array = np.empty_like(current_data)
         np.multiply(current_data, 1.0 - ft, out=self._array)
         self._array += next_data * ft
-        return FieldData(self._working_array, offsets)
+        return FieldData(self._array, offsets)
 
     @classmethod
     def from_numpy(

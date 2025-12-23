@@ -3,7 +3,7 @@
 from . import kernels
 from .fields import StaticField, TimeDependentField
 from .fieldset import Fieldset
-from .particle_simulation import ParticleSimulation, SimulationBuilder
+from .particle_simulation import Simulation, SimulationBuilder
 from .tasks import SimulationState, Task
 from .timesteppers import RK2Timestepper, Timestepper
 
@@ -13,7 +13,7 @@ __all__ = [
     "TemporalField",
     "StaticField",
     "Fieldset",
-    "ParticleSimulation",
+    "Simulation",
     "SimulationBuilder",
     "SimulationState",
     "Task",

@@ -8,7 +8,7 @@ from .tasks import SimulationState, Task
 from .timesteppers import Timestepper
 
 
-class ParticleSimulation:
+class Simulation:
     """Class representing a particle simulation."""
 
     def __init__(
@@ -22,7 +22,7 @@ class ParticleSimulation:
         yidx_bounds: tuple[float, float] | None = None,
         xidx_bounds: tuple[float, float] | None = None,
     ) -> None:
-        """Initialize the ParticleSimulation.
+        """Initialize the Simulation.
 
         Args:
             builder: The SimulationBuilder used to configure the simulation.
@@ -161,7 +161,7 @@ class SimulationBuilder:
         xidx_bounds: tuple[float, float] | None = None,
         **tasks: Task,
     ) -> None:
-        """Class for build a ParticleSimulation.
+        """Class for building a Simulation.
 
         Args:
             timestepper: The launcher responsible for executing kernels.
@@ -201,13 +201,13 @@ class SimulationBuilder:
             )
         del self._tasks[key]
 
-    def build_simulation(self, nparticles: int) -> ParticleSimulation:
-        """Build and return the ParticleSimulation.
+    def build_simulation(self, nparticles: int) -> Simulation:
+        """Build and return the Simulation.
 
         Args:
             nparticles: The number of particles in the simulation.
         """
-        return ParticleSimulation(
+        return Simulation(
             nparticles=nparticles,
             timestepper=self._timestepper,
             fieldset=self._fieldset,

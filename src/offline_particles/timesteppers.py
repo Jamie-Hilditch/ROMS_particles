@@ -5,7 +5,6 @@ import abc
 import numpy as np
 import numpy.typing as npt
 
-from .kernel_tools import unsafe_inverse_linear_interpolation
 from .kernels import ParticleKernel
 from .launcher import Launcher, register_scalar_data_source
 
@@ -70,10 +69,15 @@ class Timestepper(abc.ABC):
 
     def get_time_index(self, time: float) -> float:
         """Get the time index corresponding to the given time."""
-        if time < self._time_array[0] or time > self._time_array[-1]:
+        time_array = self._time_array
+        if time < time_array[0] or time > time_array[-1]:
             raise ValueError("Time is out of bounds of the time array.")
 
-        return unsafe_inverse_linear_interpolation(self._time_array, time)
+        idx = np.searchsorted(time_array, time, side="right") - 1
+        t0 = time_array[idx]
+        t1 = time_array[idx + 1]
+        fraction = (time - t0) / (t1 - t0)
+        return idx + fraction
 
     def advance_time(self) -> None:
         """Advance the current time by dt and update the time index."""

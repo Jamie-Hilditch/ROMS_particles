@@ -13,10 +13,10 @@ from .._interpolation.linear cimport trilinear_interpolation, bilinear_interpola
 
 # linear interpolation kernels 
 
-cdef void _linear_interpolation(particles, scalars, fielddata, dimension_idx, field_name, particle_name):
+cdef void _linear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx, field_name, particle_name):
     # unpack required particle fields
     cdef unsigned char[::1] status
-    cdef double[::1] zidx, output
+    cdef double[::1] idx, output
     status = particles.status
     idx = particles[dimension_idx]
     output = particles[particle_name]
@@ -42,7 +42,7 @@ cdef void _linear_interpolation(particles, scalars, fielddata, dimension_idx, fi
                 idx[i] + off
             )
 
-cdef void _bilinear_interpolation(particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name):
+cdef void _bilinear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name):
     # unpack required particle fields
     cdef unsigned char[::1] status
     cdef double[::1] idx0, idx1, output
@@ -71,10 +71,10 @@ cdef void _bilinear_interpolation(particles, scalars, fielddata, dimension_idx0,
                 idx1[i] + off1
             )
 
-cdef void _trilinear_interpolation(particles, scalars, fielddata field_name, particle_name):
+cdef void _trilinear_interpolation_kernel_function(particles, scalars, fielddata, field_name, particle_name):
     # unpack required particle fields
     cdef unsigned char[::1] status
-    cdef double[::1] idx0, idx1, idx2, output
+    cdef double[::1] zidx, yidx, xidx, output
     status = particles.status
     zidx = particles.zidx
     yidx = particles.yidx
@@ -102,17 +102,30 @@ cdef void _trilinear_interpolation(particles, scalars, fielddata field_name, par
                 xidx[i] + offx
             )
 
+# python wrappers
+cpdef linear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx, field_name, particle_name):
+    """Perform linear interpolation on a 1D array."""
+    return _linear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx, field_name, particle_name)
+
+cpdef bilinear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name):
+    """Perform bilinear interpolation on a 2D array."""
+    return _bilinear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name)
+
+cpdef trilinear_interpolation_kernel_function(particles, scalars, fielddata, field_name, particle_name):
+    """Perform trilinear interpolation on a 3D array."""
+    return _trilinear_interpolation_kernel_function(particles, scalars, fielddata, field_name, particle_name)
+
 # kernel factories
 def linear_interpolation_kernel(field: str, output_name: str | None = None, dimension: Literal["z", "y", "x"] = "z") -> ParticleKernel:
     """Return a ParticleKernel that performs linear interpolation of field data."""
     if dimension not in {"z", "y", "x"}:
         raise ValueError(f"Invalid dimension: {dimension}. Valid options are 'z', 'y', or 'x'.")
-    dimension_idx = dimensions + "idx"
+    dimension_idx = dimension + "idx"
     if output_name is None:
         output_name = field
 
     kernel_function = partial(
-        _linear_interpolation,
+        linear_interpolation,
         dimension_idx=dimension_idx,
         field_name=field,
         particle_name=output_name
@@ -139,7 +152,7 @@ def bilinear_interpolation_kernel(field: str, output_name: str | None = None, di
         output_name = field
 
     kernel_function = partial(
-        _bilinear_interpolation,
+        bilinear_interpolation,
         dimension_idx0=dimension_idx0,
         dimension_idx1=dimension_idx1,
         field_name=field,
@@ -162,7 +175,7 @@ def trilinear_interpolation_kernel(field: str, output_name: str | None = None) -
     if output_name is None:
         output_name = field
     kernel_function = partial(
-        _trilinear_interpolation,
+        trilinear_interpolation,
         field_name=field,
         particle_name=output_name
     )

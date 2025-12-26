@@ -262,7 +262,7 @@ class TimeDependentField(Field):
             raise ValueError("TimeDependentField requires at least 2 time steps.")
         self._num_timesteps = self._data.shape[0]
         self._It = 0
-        self._current_time_slice = self._spatial_array_factory(
+        self._previous_time_slice = self._spatial_array_factory(
             self._data[0, ...], self.z_stagger, self.y_stagger, self.x_stagger
         )
         self._next_time_slice = self._spatial_array_factory(
@@ -272,7 +272,7 @@ class TimeDependentField(Field):
     def _allocate_interpolation_arrays(self, shape: tuple[int, ...]) -> None:
         """Allocate temporary arrays for interpolation."""
         self._array_shape = shape
-        self._gt_current = np.empty(shape=shape, dtype=self._data.dtype)
+        self._gt_previous = np.empty(shape=shape, dtype=self._data.dtype)
         self._ft_next = np.empty(shape=shape, dtype=self._data.dtype)
         self._output = np.empty(shape=shape, dtype=self._output_dtype)
 
@@ -318,9 +318,9 @@ class TimeDependentField(Field):
             )
 
     @property
-    def current_time_slice(self) -> SpatialArray:
-        """Get the current time slice as a SpatialArray."""
-        return self._current_time_slice
+    def previous_time_slice(self) -> SpatialArray:
+        """Get the previous time slice as a SpatialArray."""
+        return self._previous_time_slice
 
     @property
     def next_time_slice(self) -> SpatialArray:
@@ -333,7 +333,7 @@ class TimeDependentField(Field):
         if self._It == self._num_timesteps - 2:
             raise IndexError("Cannot increment past the penultimate timestep.")
         self._It += 1
-        self._current_time_slice = self._next_time_slice
+        self._previous_time_slice = self._next_time_slice
         self._next_time_slice = self._spatial_array_factory(
             self._data[self._It + 1, ...],
             self.z_stagger,
@@ -341,14 +341,31 @@ class TimeDependentField(Field):
             self.x_stagger,
         )
 
+    def decrement_time(self) -> None:
+        """Decrement the time index, creating the previous spatial arrays."""
+        # error if at smallest time
+        if self._It == 0:
+            raise IndexError("Cannot decrement past the first timestep.")
+        self._It -= 1
+        self._next_time_slice = self._previous_time_slice
+        self._previous_time_slice = self._spatial_array_factory(
+            self._data[self._It, ...],
+            self.z_stagger,
+            self.y_stagger,
+            self.x_stagger,
+        )
+
     def set_time_index(self, It: int) -> None:
         """Set the time index, adjusting the spatial arrays."""
-        # if current time index do nothing
+        # if previous time index do nothing
         if It == self._It:
             return
         # if it's the next timestep we can increment
         if It == self._It + 1:
             return self.increment_time()
+        # if it's the previous timestep we can decrement
+        if It == self._It - 1:
+            return self.decrement_time()
         # else check range
         if It < 0 or It > self._num_timesteps - 2:
             raise IndexError(
@@ -356,7 +373,7 @@ class TimeDependentField(Field):
             )
 
         self._It = It
-        self._current_time_slice = self._spatial_array_factory(
+        self._previous_time_slice = self._spatial_array_factory(
             self._data[self._It, ...], self.z_stagger, self.y_stagger, self.x_stagger
         )
         self._next_time_slice = self._spatial_array_factory(
@@ -388,19 +405,19 @@ class TimeDependentField(Field):
         self.set_time_index(It)
 
         # load the two time subsets
-        current_data, offsets = self._current_time_slice.get_data_subset(bbox)
+        previous_data, offsets = self._previous_time_slice.get_data_subset(bbox)
         next_data, _ = self._next_time_slice.get_data_subset(bbox)
 
         # linear interpolation in time
-        if self._array_shape != current_data.shape:
-            self._allocate_interpolation_arrays(current_data.shape)
+        if self._array_shape != previous_data.shape:
+            self._allocate_interpolation_arrays(previous_data.shape)
 
         ft = self._data_dtype.type(ft)
         gt = self._data_dtype.type(1 - ft)
 
-        np.multiply(current_data, gt, out=self._gt_current)
+        np.multiply(previous_data, gt, out=self._gt_previous)
         np.multiply(next_data, ft, out=self._ft_next)
-        np.add(self._gt_current, self._ft_next, out=self._output, casting="unsafe")
+        np.add(self._gt_previous, self._ft_next, out=self._output, casting="unsafe")
 
         return FieldData(self._output, offsets)
 

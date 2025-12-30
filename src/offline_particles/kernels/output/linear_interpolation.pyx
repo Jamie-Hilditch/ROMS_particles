@@ -8,7 +8,11 @@ from .._kernels import ParticleKernel
 from cython.parallel cimport prange
 
 from .._core cimport unpack_fielddata_1d, unpack_fielddata_2d, unpack_fielddata_3d
-from .._interpolation.linear cimport trilinear_interpolation, bilinear_interpolation, linear_interpolation 
+from .._interpolation.linear cimport (
+    trilinear_interpolation,
+    bilinear_interpolation,
+    linear_interpolation
+)
 
 # export all python objects
 __all__ = [
@@ -22,9 +26,16 @@ __all__ = [
     "horizontal_interpolation_kernel",
 ]
 
-# linear interpolation kernels 
+# linear interpolation kernels
 
-cdef void _linear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx, field_name, particle_name):
+cdef void _linear_interpolation_kernel_function(
+    particles,
+    scalars,
+    fielddata,
+    dimension_idx,
+    field_name,
+    particle_name
+):
     # unpack required particle fields
     cdef unsigned char[::1] status
     cdef double[::1] idx, output
@@ -53,7 +64,15 @@ cdef void _linear_interpolation_kernel_function(particles, scalars, fielddata, d
                 idx[i] + off
             )
 
-cdef void _bilinear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name):
+cdef void _bilinear_interpolation_kernel_function(
+    particles,
+    scalars,
+    fielddata,
+    dimension_idx0,
+    dimension_idx1,
+    field_name,
+    particle_name
+):
     # unpack required particle fields
     cdef unsigned char[::1] status
     cdef double[::1] idx0, idx1, output
@@ -116,18 +135,27 @@ cdef void _trilinear_interpolation_kernel_function(particles, scalars, fielddata
 # python wrappers
 cpdef linear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx, field_name, particle_name):
     """Perform linear interpolation on a 1D array."""
-    return _linear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx, field_name, particle_name)
+    return _linear_interpolation_kernel_function(
+        particles, scalars, fielddata, dimension_idx, field_name, particle_name
+    )
 
-cpdef bilinear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name):
+cpdef bilinear_interpolation_kernel_function(
+    particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name
+):
     """Perform bilinear interpolation on a 2D array."""
-    return _bilinear_interpolation_kernel_function(particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name)
+    return _bilinear_interpolation_kernel_function(
+        particles, scalars, fielddata, dimension_idx0, dimension_idx1, field_name, particle_name
+    )
 
 cpdef trilinear_interpolation_kernel_function(particles, scalars, fielddata, field_name, particle_name):
     """Perform trilinear interpolation on a 3D array."""
     return _trilinear_interpolation_kernel_function(particles, scalars, fielddata, field_name, particle_name)
 
+
 # kernel factories
-def linear_interpolation_kernel(field: str, output_name: str | None = None, dimension: Literal["z", "y", "x"] = "z") -> ParticleKernel:
+def linear_interpolation_kernel(
+    field: str, output_name: str | None = None, dimension: Literal["z", "y", "x"] = "z"
+) -> ParticleKernel:
     """Return a ParticleKernel that performs linear interpolation of field data."""
     if dimension not in {"z", "y", "x"}:
         raise ValueError(f"Invalid dimension: {dimension}. Valid options are 'z', 'y', or 'x'.")
@@ -152,7 +180,10 @@ def linear_interpolation_kernel(field: str, output_name: str | None = None, dime
         simulation_fields=[field]
     )
 
-def bilinear_interpolation_kernel(field: str, output_name: str | None = None, dimensions: tuple[str, str] = ("y", "x")) -> ParticleKernel:
+
+def bilinear_interpolation_kernel(
+    field: str, output_name: str | None = None, dimensions: tuple[str, str] = ("y", "x")
+) -> ParticleKernel:
     """Return a ParticleKernel that performs bilinear interpolation of field data."""
     valid_dimensions = {("z", "y"), ("z", "x"), ("y", "x")}
     if dimensions not in valid_dimensions:
@@ -181,6 +212,7 @@ def bilinear_interpolation_kernel(field: str, output_name: str | None = None, di
         simulation_fields=[field]
     )
 
+
 def trilinear_interpolation_kernel(field: str, output_name: str | None = None) -> ParticleKernel:
     """Return a ParticleKernel that performs trilinear interpolation of field data."""
     if output_name is None:
@@ -203,9 +235,11 @@ def trilinear_interpolation_kernel(field: str, output_name: str | None = None) -
         simulation_fields=[field]
     )
 
+
 def vertical_interpolation_kernel(field: str, output_name: str | None = None) -> ParticleKernel:
     """Return a ParticleKernel that performs vertical linear interpolation of field data."""
     return linear_interpolation_kernel(field, output_name, dimension="z")
+
 
 def horizontal_interpolation_kernel(field: str, output_name: str | None = None) -> ParticleKernel:
     """Return a ParticleKernel that performs horizontal bilinear interpolation of field data."""

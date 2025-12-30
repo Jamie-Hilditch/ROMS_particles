@@ -43,8 +43,7 @@ cdef void _rk2_step_1(particles, scalars, fielddata):
     dyidx1 = particles._dyidx1
     dz1 = particles._dz1
 
-
-    # unpack scalars 
+    # unpack scalars
     cdef double hc = scalars["hc"]
     cdef int NZ = scalars["NZ"]
 
@@ -57,7 +56,6 @@ cdef void _rk2_step_1(particles, scalars, fielddata):
     v_array, v_offz, v_offy, v_offx = unpack_fielddata_3d(fielddata["v"])
     w_array, w_offz, w_offy, w_offx = unpack_fielddata_3d(fielddata["w"])
 
-    
     # unpack 2D field data
     cdef double[:, ::1] dx_array, dy_array, h_array, zeta_array
     cdef double dx_offy, dx_offx
@@ -96,17 +94,17 @@ cdef void _rk2_step_1(particles, scalars, fielddata):
 
             # skip inactive particles
             if status[i] != 0:
-                continue 
+                continue
 
-            # first compute z 
+            # first compute z
             h_value = bilinear_interpolation(
-                h_array, 
-                yidx[i] + h_offy, 
+                h_array,
+                yidx[i] + h_offy,
                 xidx[i] + h_offx
             )
             zeta_value = bilinear_interpolation(
-                zeta_array, 
-                yidx[i] + zeta_offy, 
+                zeta_array,
+                yidx[i] + zeta_offy,
                 xidx[i] + zeta_offx
             )
             C_value = linear_interpolation(
@@ -124,7 +122,7 @@ cdef void _rk2_step_1(particles, scalars, fielddata):
 
             # then interpolate horizontal velocities in index space
             u_value = trilinear_interpolation(
-                u_array,    
+                u_array,
                 zidx[i] + u_offz,
                 yidx[i] + u_offy,
                 xidx[i] + u_offx
@@ -156,14 +154,11 @@ cdef void _rk2_step_1(particles, scalars, fielddata):
                 xidx[i] + w_offx
             )
 
-           
-
 cdef void _rk2_step_2(particles, scalars, fielddata):
     # unpack required particle fields
-    cdef unsigned char[::1] status 
-    cdef double[::1] zidx, yidx, xidx, z, dxidx1, dyidx1, dz1, dxidx2, dyidx2, dz2
+    cdef unsigned char[::1] status
+    cdef double[::1] yidx, xidx, z, dxidx1, dyidx1, dz1, dxidx2, dyidx2, dz2
     status = particles.status
-    zidx = particles.zidx
     yidx = particles.yidx
     xidx = particles.xidx
     z = particles.z
@@ -174,13 +169,13 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
     dyidx2 = particles._dyidx2
     dz2 = particles._dz2
 
-    # unpack scalars 
+    # unpack scalars
     cdef double dt = scalars["_dt"]
     cdef double alpha = scalars["_RK2_alpha"]
     cdef double hc = scalars["hc"]
     cdef int NZ = scalars["NZ"]
 
-     # unpack 3D field data
+    # unpack 3D field data
     cdef double[:, :, ::1] u_array, v_array, w_array
     cdef double u_offz, u_offy, u_offx
     cdef double v_offz, v_offy, v_offx
@@ -188,7 +183,7 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
     u_array, u_offz, u_offy, u_offx = unpack_fielddata_3d(fielddata["u"])
     v_array, v_offz, v_offy, v_offx = unpack_fielddata_3d(fielddata["v"])
     w_array, w_offz, w_offy, w_offx = unpack_fielddata_3d(fielddata["w"])
-    
+
     # unpack 2D field data
     cdef double[:, ::1] dx_array, dy_array, h_array, zeta_array
     cdef double dx_offy, dx_offx
@@ -200,21 +195,19 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
     h_array, h_offy, h_offx = unpack_fielddata_2d(fielddata["h"])
     zeta_array, zeta_offy, zeta_offx = unpack_fielddata_2d(fielddata["zeta"])
 
-
     # unpack 1D field data
     cdef double[::1] C_array
     cdef double C_offz
     C_array, C_offz = unpack_fielddata_1d(fielddata["C"])
 
     # loop over particles
-    cdef Py_ssize_t i, nparticles 
+    cdef Py_ssize_t i, nparticles
     nparticles = status.shape[0]
 
     # declare loop variables
     cdef double z_int, yidx_int, xidx_int
-    cdef double h_value, zeta_value, C_value, zidx_int
+    cdef double h_value, zeta_value, zidx_int
     cdef double u_value, v_value, dx_value, dy_value
-
 
     # --- Chunking parameters ---
     cdef Py_ssize_t chunk_size = 3000
@@ -229,7 +222,7 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
         for i in range(start, end):
             # skip inactive particles
             if status[i] != 0:
-                continue 
+                continue
 
             # intermediate positions
             z_int = z[i] + alpha * dt * dz1[i]
@@ -238,20 +231,20 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
 
             # compute intermediate zidx
             h_value = bilinear_interpolation(
-                h_array, 
-                yidx_int + h_offy, 
+                h_array,
+                yidx_int + h_offy,
                 xidx_int + h_offx
             )
             zeta_value = bilinear_interpolation(
-                zeta_array, 
-                yidx_int + zeta_offy, 
+                zeta_array,
+                yidx_int + zeta_offy,
                 xidx_int + zeta_offx
             )
             zidx_int = compute_zidx(z_int, h_value, zeta_value, hc, NZ, C_array, C_offz)
 
             # interpolate horizontal velocities in index space
             u_value = trilinear_interpolation(
-                u_array,    
+                u_array,
                 zidx_int + u_offz,
                 yidx_int + u_offy,
                 xidx_int + u_offx
@@ -282,7 +275,7 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
                 yidx_int + w_offy,
                 xidx_int + w_offx
             )
-            
+
 
 cdef void _rk2_update(particles, scalars, fielddata):
     # unpack required particle fields
@@ -300,12 +293,12 @@ cdef void _rk2_update(particles, scalars, fielddata):
     dyidx2 = particles._dyidx2
     dz2 = particles._dz2
 
-    # unpack scalars 
+    # unpack scalars
     cdef double dt = scalars["_dt"]
     cdef double alpha = scalars["_RK2_alpha"]
     cdef double hc = scalars["hc"]
     cdef int NZ = scalars["NZ"]
-    
+
     # unpack 2D field data
     cdef double[:, ::1] h_array, zeta_array
     cdef double h_offy, h_offx
@@ -319,7 +312,7 @@ cdef void _rk2_update(particles, scalars, fielddata):
     C_array, C_offz = unpack_fielddata_1d(fielddata["C"])
 
     # loop over particles
-    cdef Py_ssize_t i, nparticles 
+    cdef Py_ssize_t i, nparticles
     nparticles = status.shape[0]
 
     # rk constants
@@ -342,7 +335,7 @@ cdef void _rk2_update(particles, scalars, fielddata):
         for i in range(start, end):
             # skip inactive particles
             if status[i] != 0:
-                continue 
+                continue
 
             # update positions
             z[i] = z[i] + b1 * dt * dz1[i] + b2 * dt * dz2[i]
@@ -351,13 +344,13 @@ cdef void _rk2_update(particles, scalars, fielddata):
 
             # compute zidx
             h_value = bilinear_interpolation(
-                h_array, 
-                yidx[i] + h_offy, 
+                h_array,
+                yidx[i] + h_offy,
                 xidx[i] + h_offx
             )
             zeta_value = bilinear_interpolation(
-                zeta_array, 
-                yidx[i] + zeta_offy, 
+                zeta_array,
+                yidx[i] + zeta_offy,
                 xidx[i] + zeta_offx
             )
             zidx[i] = compute_zidx(z[i], h_value, zeta_value, hc, NZ, C_array, C_offz)
@@ -380,16 +373,16 @@ rk2_w_advection_step_1_kernel = ParticleKernel(
     rk2_w_advection_step_1,
     particle_fields={
         "status": np.uint8,
-        "zidx": np.float64, 
-        "yidx": np.float64, 
-        "xidx": np.float64, 
-        "z": np.float64, 
-        "_dxidx1": np.float64, 
-        "_dyidx1": np.float64, 
+        "zidx": np.float64,
+        "yidx": np.float64,
+        "xidx": np.float64,
+        "z": np.float64,
+        "_dxidx1": np.float64,
+        "_dyidx1": np.float64,
         "_dz1": np.float64
     },
     scalars={
-        "hc": np.float64, 
+        "hc": np.float64,
         "NZ": np.int32
     },
     simulation_fields=[
@@ -407,21 +400,21 @@ rk2_w_advection_step_2_kernel = ParticleKernel(
     rk2_w_advection_step_2,
     particle_fields={
         "status": np.uint8,
-        "zidx": np.float64, 
-        "yidx": np.float64, 
-        "xidx": np.float64, 
-        "z": np.float64, 
-        "_dxidx1": np.float64, 
-        "_dyidx1": np.float64, 
+        "zidx": np.float64,
+        "yidx": np.float64,
+        "xidx": np.float64,
+        "z": np.float64,
+        "_dxidx1": np.float64,
+        "_dyidx1": np.float64,
         "_dz1": np.float64,
-        "_dxidx2": np.float64, 
-        "_dyidx2": np.float64, 
+        "_dxidx2": np.float64,
+        "_dyidx2": np.float64,
         "_dz2": np.float64
     },
     scalars={
         "_dt": np.float64,
         "_RK2_alpha": np.float64,
-        "hc": np.float64, 
+        "hc": np.float64,
         "NZ": np.int32
     },
     simulation_fields=[
@@ -439,21 +432,21 @@ rk2_w_advection_update_kernel = ParticleKernel(
     rk2_w_advection_update,
     particle_fields={
         "status": np.uint8,
-        "zidx": np.float64, 
-        "yidx": np.float64, 
-        "xidx": np.float64, 
-        "z": np.float64, 
-        "_dxidx1": np.float64, 
-        "_dyidx1": np.float64, 
+        "zidx": np.float64,
+        "yidx": np.float64,
+        "xidx": np.float64,
+        "z": np.float64,
+        "_dxidx1": np.float64,
+        "_dyidx1": np.float64,
         "_dz1": np.float64,
-        "_dxidx2": np.float64, 
-        "_dyidx2": np.float64, 
+        "_dxidx2": np.float64,
+        "_dyidx2": np.float64,
         "_dz2": np.float64
     },
     scalars={
         "_dt": np.float64,
         "_RK2_alpha": np.float64,
-        "hc": np.float64, 
+        "hc": np.float64,
         "NZ": np.int32
     },
     simulation_fields=[

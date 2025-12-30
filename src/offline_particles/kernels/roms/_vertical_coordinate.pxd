@@ -35,7 +35,7 @@ cdef inline double compute_z(double zidx, int Nz, double hc, double h, double C,
     return _z_coordinate(S, h, zeta)
 
 #############################
-### computing zidx from z ###  
+### computing zidx from z ###
 #############################
 
 cdef inline double _S_from_z(double z, double h, double zeta) noexcept nogil:
@@ -47,12 +47,14 @@ cdef inline double _sigma_from_Cidx(int Cidx, double C_offset, int Nz) noexcept 
     cdef double zidx = Cidx - C_offset
     return _sigma_coordinate(zidx, Nz)
 
-cdef inline Py_ssize_t _compute_Cidx_from_S(double S, double hc, int NZ, double h, double zeta, const double[::1] C, double C_offset) noexcept nogil:
+cdef inline Py_ssize_t _compute_Cidx_from_S(
+    double S, double hc, int NZ, double h, double zeta, const double[::1] C, double C_offset
+) noexcept nogil:
     """Compute the C array index from the S coordinate.
-    
+
     C_idx corresponds to the index in the stretching function array C such that
         S_coordinate(hc, sigma_from_Cidx(C_idx, C_offset, NZ), h, C[C_idx]) <= S
-    and 
+    and
         S_coordinate(hc, sigma_from_Cidx(C_idx + 1, C_offset, NZ), h, C[C_idx + 1]) > S
     This is done via a binary search over the C array.
     If S is outside the range of S values defined by C, the first or penultimate index is returned.
@@ -73,7 +75,7 @@ cdef inline Py_ssize_t _compute_Cidx_from_S(double S, double hc, int NZ, double 
     while lo < hi - 1:
         mid = (lo + hi) // 2
         S_mid = _S_coordinate(hc, _sigma_from_Cidx(mid, C_offset, NZ), h, C[mid])
-        
+
         if S_mid <= S:
             lo = mid
         else:
@@ -81,17 +83,21 @@ cdef inline Py_ssize_t _compute_Cidx_from_S(double S, double hc, int NZ, double 
 
     return lo
 
-cdef inline double _zidx_from_S(double S, double hc, int NZ, double h, double zeta, const double[::1] C, double C_offset) noexcept nogil:
+cdef inline double _zidx_from_S(
+    double S, double hc, int NZ, double h, double zeta, const double[::1] C, double C_offset
+) noexcept nogil:
     """Compute the vertical index from the S coordinate."""
     # Find the C index corresponding to S
-    cdef Py_ssize_t Cidx = _compute_Cidx_from_S(S, hc, NZ, h, zeta, C, C_offset)    
+    cdef Py_ssize_t Cidx = _compute_Cidx_from_S(S, hc, NZ, h, zeta, C, C_offset)
     # Linear interpolation to find the fractional index
     cdef double S_low = _S_coordinate(hc, _sigma_from_Cidx(Cidx, C_offset, NZ), h, C[Cidx])
     cdef double S_high = _S_coordinate(hc, _sigma_from_Cidx(Cidx + 1, C_offset, NZ), h, C[Cidx + 1])
     cdef double f = (S - S_low) / (S_high - S_low)
     return Cidx - C_offset + f
 
-cdef inline double compute_zidx(double z, double h, double zeta, double hc, int NZ, const double[::1] C, double C_offset) noexcept nogil:
+cdef inline double compute_zidx(
+    double z, double h, double zeta, double hc, int NZ, const double[::1] C, double C_offset
+) noexcept nogil:
     """Compute the vertical index from the physical vertical coordinate."""
     cdef double S = _S_from_z(z, h, zeta)
     return _zidx_from_S(S, hc, NZ, h, zeta, C, C_offset)

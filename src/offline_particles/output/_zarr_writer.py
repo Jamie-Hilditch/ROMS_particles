@@ -5,6 +5,7 @@ from typing import Any, Mapping
 
 import numpy as np
 import zarr
+import zarr.storage
 
 from ..events import AbstractSchedule, SimulationState
 from ._output import AbstractOutputWriter, AbstractOutputWriterBuilder, Output
@@ -19,7 +20,7 @@ class ZarrOutputWriter(AbstractOutputWriter):
         self,
         name: str,
         schedule: AbstractSchedule,
-        store: zarr.StoreLike,
+        store: zarr.storage.StoreLike,
         time_array: zarr.Array,
         outputs: dict[str, tuple[Output, zarr.Array]],
     ) -> None:
@@ -43,7 +44,7 @@ class ZarrOutputWriter(AbstractOutputWriter):
         return self._name
 
     @property
-    def store(self) -> zarr.StoreLike:
+    def store(self) -> zarr.storage.StoreLike:
         """The Zarr store."""
         return self._store
 
@@ -88,7 +89,7 @@ class ZarrOutputWriter(AbstractOutputWriter):
         expected_count = self._output_count + 1
 
         # check time output
-        time_count = self._time_output.shape[0]
+        time_count = self._time_array.shape[0]
         if time_count != expected_count:
             raise RuntimeError(
                 f"Time output has {time_count} entries, expected {expected_count}."
@@ -112,7 +113,7 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
         self,
         name: str,
         schedule: AbstractSchedule,
-        store: zarr.StoreLike,
+        store: zarr.storage.StoreLike,
         *,
         chunksize: int = DEFAULT_CHUNKSIZE,
         time_name: str = "time",
@@ -206,19 +207,16 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
         )
 
     def _initialize_output_array(
-        self, name: str, output: Output, nparticles, array_kwargs: dict[str, Any]
-    ) -> None:
+        self, name: str, output: Output, nparticles: int, array_kwargs: dict[str, Any]
+    ) -> zarr.Array:
         """Initialize Zarr array for output."""
         shape = (0, nparticles)
-        array_kwargs = self._array_kwargs.copy()
-        if name in self._output_kwargs:
-            array_kwargs.update(self._output_kwargs[name])
-
+        chunks = (1, min(self._chunksize, nparticles))
         return zarr.create_array(
             self._store,
             name=name,
             shape=shape,
             dtype=output.dtype,
-            chunks=(1, min(self._chunksize, nparticles)),
+            chunks=chunks,
             **array_kwargs,
         )

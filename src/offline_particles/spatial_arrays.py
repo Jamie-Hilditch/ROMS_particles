@@ -5,7 +5,6 @@ import collections
 import enum
 import itertools
 import logging
-from typing import Self
 
 import dask.array as da
 import numpy as np
@@ -77,7 +76,7 @@ class SpatialArray(abc.ABC):
         z_stagger: Stagger,
         y_stagger: Stagger,
         x_stagger: Stagger,
-    ) -> Self:
+    ) -> None:
         self._z_stagger = z_stagger
         self._y_stagger = y_stagger
         self._x_stagger = x_stagger
@@ -161,7 +160,7 @@ class SpatialArray(abc.ABC):
     def get_data_subset(
         self,
         bounding_box: BBox,
-    ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
+    ) -> tuple[npt.NDArray, tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
@@ -190,7 +189,7 @@ class NumpyArray(SpatialArray):
         z_stagger: Stagger,
         y_stagger: Stagger,
         x_stagger: Stagger,
-    ) -> Self:
+    ) -> None:
         super().__init__(z_stagger, y_stagger, x_stagger)
         self._data = np.array(data)
 
@@ -207,7 +206,7 @@ class NumpyArray(SpatialArray):
     def get_data_subset(
         self,
         bounding_box: BBox,
-    ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
+    ) -> tuple[npt.NDArray, tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
@@ -237,7 +236,7 @@ class ChunkedDaskArray(SpatialArray):
         z_stagger: Stagger,
         y_stagger: Stagger,
         x_stagger: Stagger,
-    ) -> Self:
+    ) -> None:
         super().__init__(z_stagger, y_stagger, x_stagger)
         self._data = data
         self._ndim = self._data.ndim
@@ -247,8 +246,8 @@ class ChunkedDaskArray(SpatialArray):
             np.cumulative_sum(chunk, include_initial=True) for chunk in self._chunks
         )
         # placeholders for array and bounds of current subset
-        self._subset: npt.NDArray[float] | None = None  # type: ignore[call-arg]
-        self._subset_bounds: tuple[tuple[int, int], ...] | None = None
+        self._subset: npt.NDArray[np.number] = np.zeros((0,) * data.ndim, data.dtype)
+        self._subset_bounds: tuple[tuple[int, int], ...] = ((0, 0),) * self._ndim
 
     @property
     def dtype(self) -> np.dtype:
@@ -263,7 +262,7 @@ class ChunkedDaskArray(SpatialArray):
     def get_data_subset(
         self,
         bounding_box: BBox,
-    ) -> tuple[npt.NDArray[float], tuple[float, ...]]:
+    ) -> tuple[npt.NDArray, tuple[float, ...]]:
         """Get a view of the data around the particle indices.
 
         Parameters
@@ -301,13 +300,13 @@ class ChunkedDaskArray(SpatialArray):
             logger.debug("Loading new data subset with bounds: %s", new_bounds)
             self._subset_bounds = new_bounds
             subset_slices = tuple(slice(*bounds) for bounds in new_bounds)
-            self._subset = self._data[subset_slices].compute()
+            self._subset = self._data[subset_slices].compute()  # type: ignore[call-arg]
 
         return self._subset, new_offsets
 
 
 def _compute_new_bounds(
-    dim_bounds: tuple[float, float], offset: float, bounds: npt.NDArray[int]
+    dim_bounds: tuple[float, float], offset: float, bounds: npt.NDArray[np.int_]
 ) -> tuple[int, int]:
     """
     Compute new dimension bounds for chunked data access.
@@ -321,7 +320,7 @@ def _compute_new_bounds(
 def compute_new_lower_bound(
     dim_min: float,
     offset: float,
-    bounds: npt.NDArray[int],
+    bounds: npt.NDArray[np.int_],
 ) -> int:
     """
     Compute new lower bound for chunked data access.
@@ -343,7 +342,7 @@ def compute_new_lower_bound(
 def compute_new_upper_bound(
     dim_max: float,
     offset: float,
-    bounds: npt.NDArray[int],
+    bounds: npt.NDArray[np.int_],
 ) -> int:
     """
     Compute new upper bound for chunked data access.

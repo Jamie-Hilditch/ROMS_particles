@@ -33,10 +33,6 @@ class Simulation:
         iteration_scheduler: IterationScheduler,
         time_scheduler: TimeScheduler,
         output_writers: Mapping[str, AbstractOutputWriter],
-        *,
-        zidx_bounds: tuple[float, float] | None = None,
-        yidx_bounds: tuple[float, float] | None = None,
-        xidx_bounds: tuple[float, float] | None = None,
     ) -> None:
         """Initialize the Simulation.
 
@@ -48,43 +44,14 @@ class Simulation:
         self._iteration_scheduler = iteration_scheduler
         self._time_scheduler = time_scheduler
 
-        # set default index bounds if not provided
-        if zidx_bounds is None:
-            zidx_bounds = (0.0, float(self._fieldset.z_size - 1))
-        if yidx_bounds is None:
-            yidx_bounds = (0.0, float(self._fieldset.y_size - 1))
-        if xidx_bounds is None:
-            xidx_bounds = (0.0, float(self._fieldset.x_size - 1))
-        self._zidx_bounds = zidx_bounds
-        self._yidx_bounds = yidx_bounds
-        self._xidx_bounds = xidx_bounds
-
         # create launcher and register kernel data functions
         self._launcher = Launcher(fieldset)
         self._launcher.maybe_increase_index_padding(timestepper.index_padding)
         self._launcher.register_scalar_data_sources_from_object(self._timestepper)
-        for task in self._tasks.values():
-            self._launcher.register_scalar_data_sources_from_object(task)
-
-        # register index bounds as scalar data sources
-        self._launcher.register_scalar_data_source(
-            "zidx_min", lambda tidx: self._zidx_bounds[0]
-        )
-        self._launcher.register_scalar_data_source(
-            "zidx_max", lambda tidx: self._zidx_bounds[1]
-        )
-        self._launcher.register_scalar_data_source(
-            "yidx_min", lambda tidx: self._yidx_bounds[0]
-        )
-        self._launcher.register_scalar_data_source(
-            "yidx_max", lambda tidx: self._yidx_bounds[1]
-        )
-        self._launcher.register_scalar_data_source(
-            "xidx_min", lambda tidx: self._xidx_bounds[0]
-        )
-        self._launcher.register_scalar_data_source(
-            "xidx_max", lambda tidx: self._xidx_bounds[1]
-        )
+        for event in self._iteration_scheduler.events:
+            self._launcher.register_scalar_data_sources_from_object(event)
+        for event in self._time_scheduler.events:
+            self._launcher.register_scalar_data_sources_from_object(event)
 
         # construct the particles
         # first gather all kernels
@@ -219,10 +186,6 @@ class SimulationBuilder:
         self,
         timestepper: Timestepper,
         fieldset: Fieldset,
-        *,
-        zidx_bounds: tuple[float, float] | None = None,
-        yidx_bounds: tuple[float, float] | None = None,
-        xidx_bounds: tuple[float, float] | None = None,
     ) -> None:
         """Class for building a Simulation.
 
@@ -231,16 +194,13 @@ class SimulationBuilder:
         """
         self._timestepper = timestepper
         self._fieldset = fieldset
-        self._zidx_bounds = zidx_bounds
-        self._yidx_bounds = yidx_bounds
-        self._xidx_bounds = xidx_bounds
 
         # events
         self._iteration_scheduler = IterationScheduler()
         self._time_scheduler = TimeScheduler()
 
         # output writers
-        self._output_writers: dict[str, AbstractOutputWriter] = dict()
+        self._output_writers: dict[str, AbstractOutputWriterBuilder] = dict()
 
     @functools.singledispatchmethod
     def add_event(self, schedule: AbstractSchedule, event: Event) -> None:
@@ -310,7 +270,4 @@ class SimulationBuilder:
             iteration_scheduler=self._iteration_scheduler,
             time_scheduler=self._time_scheduler,
             output_writers=output_writers,
-            zidx_bounds=self._zidx_bounds,
-            yidx_bounds=self._yidx_bounds,
-            xidx_bounds=self._xidx_bounds,
         )

@@ -6,11 +6,17 @@ import numpy as np
 import numpy.typing as npt
 
 from .kernels import ParticleKernel
-from .launcher import Launcher, register_scalar_data_source
+from .launcher import Launcher, ScalarSource
+from .particles import Particles
 
 
 class Timestepper(abc.ABC):
     """Class that handles particle advection timestepping."""
+
+    # scalar data sources
+    _dt_scalar = ScalarSource("_dt", lambda self, tidx: self._dt)
+    _time_scalar = ScalarSource("_time", lambda self, tidx: self._time)
+    _tidx_scalar = ScalarSource("_tidx", lambda self, tidx: self._tidx)
 
     def __init__(
         self,
@@ -25,11 +31,11 @@ class Timestepper(abc.ABC):
         # check time array is strictly increasing
         if not np.all(np.diff(time_array) > 0):
             raise ValueError("Time array must be strictly increasing.")
-        self._time_array = time_array
+        self._time_array = np.asarray(time_array, dtype=np.float64)
 
         # store iteration, timestep, current time and current time index
         self._iteration = iteration
-        self._dt = dt
+        self._dt = np.float64(dt)
         self.set_time(time)
 
         self._index_padding = index_padding
@@ -59,22 +65,7 @@ class Timestepper(abc.ABC):
         """The index padding required by this timestepper."""
         return self._index_padding
 
-    @register_scalar_data_source("_dt")
-    def dt_scalar_data(self, *args) -> float:
-        """get dt."""
-        return self._dt
-
-    @register_scalar_data_source("_time")
-    def time_kernel_data(self, *args) -> float:
-        """get time."""
-        return self._time
-
-    @register_scalar_data_source("_tidx")
-    def tidx_kernel_data(self, *args) -> float:
-        """get time index as field data."""
-        return self._tidx
-
-    def get_time_index(self, time: float) -> float:
+    def get_time_index(self, time: np.float64) -> np.float64:
         """Get the time index corresponding to the given time."""
         time_array = self._time_array
         if time < time_array[0] or time > time_array[-1]:
@@ -94,11 +85,16 @@ class Timestepper(abc.ABC):
 
     def set_time(self, time: float) -> None:
         """Set the current time and update the time index."""
-        self._time = time
-        self._tidx = self.get_time_index(time)
+        self._time = np.float64(time)
+        self._tidx = self.get_time_index(self._time)
 
     @abc.abstractmethod
-    def timestep_particles(self, particles: npt.NDArray, launcher: Launcher) -> None:
+    def kernels(self) -> tuple[ParticleKernel, ...]:
+        """Get the kernels used by this timestepper."""
+        pass
+
+    @abc.abstractmethod
+    def timestep_particles(self, particles: Particles, launcher: Launcher) -> None:
         """Timestep the particles by one time step."""
         pass
 
@@ -113,6 +109,9 @@ class RK2Timestepper(Timestepper):
     -----------------------------------------
             |  1 - 1 / 2 alpha    1 / 2 alpha
     """
+
+    # scalar source
+    _alpha_scalar = ScalarSource("_RK2_alpha", lambda self, tidx: self._alpha)
 
     def __init__(
         self,
@@ -146,11 +145,6 @@ class RK2Timestepper(Timestepper):
         """The RK2 alpha parameter used by this launcher."""
         return self._alpha
 
-    @register_scalar_data_source("_RK2_alpha")
-    def get_alpha_kernel_data(self, *args) -> float:
-        """get alpha."""
-        return self._alpha
-
     def kernels(self) -> tuple[ParticleKernel, ...]:
         """Get the kernels used by this timestepper."""
         if self._pre_step_kernel is not None:
@@ -171,7 +165,7 @@ class RK2Timestepper(Timestepper):
             + post
         )
 
-    def timestep_particles(self, particles: npt.NDArray, launcher: Launcher) -> None:
+    def timestep_particles(self, particles: Particles, launcher: Launcher) -> None:
         """Launch the RK2 kernels to timestep the particles."""
         if self._pre_step_kernel is not None:
             launcher.launch_kernel(self._pre_step_kernel, particles, self._tidx)

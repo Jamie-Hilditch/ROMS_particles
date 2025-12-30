@@ -125,6 +125,12 @@ class AbstractOutputWriterBuilder(abc.ABC):
 
     @property
     @abc.abstractmethod
+    def name(self) -> str:
+        """The name of the output writer."""
+        pass
+
+    @property
+    @abc.abstractmethod
     def schedule(self) -> AbstractSchedule:
         """The output schedule."""
         pass

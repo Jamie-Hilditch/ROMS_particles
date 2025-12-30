@@ -1,6 +1,6 @@
 """Submodule for particle kernel launchers."""
 
-from typing import Callable, NotRequired, Protocol, cast
+from typing import Callable, TypeVar
 
 import numpy as np
 
@@ -10,14 +10,37 @@ from .kernels import ParticleKernel
 from .particles import Particles
 from .spatial_arrays import BBox
 
+T = TypeVar("T", bound=np.number)
 
-class ScalarDataSource(Protocol):
-    """Protocol for scalar data source functions."""
 
-    __scalar_data_name__: NotRequired[str]
+class ScalarSource[T]:
+    """Descriptor declaring a scalar data source.
 
-    def __call__(self, time_index: float) -> np.number: ...
+    The getter must have signature:
+        (self, tidx: float) -> np.generic
+    """
 
+    def __init__(
+        self,
+        name: str,
+        getter: Callable[[object, float], T],
+    ) -> None:
+        self.name = name
+        self._getter = getter
+
+    def __get__(self, obj: object | None, owner: type | None = None):
+        # Accessed on the class → return descriptor for discovery
+        if obj is None:
+            return self
+
+        # Accessed on an instance → return bound callable
+        def scalar_func(tidx: float) -> T:
+            return self._getter(obj, tidx)
+
+        return scalar_func
+
+
+type ScalarProvider = Callable[[float], np.number]
 
 # -------------------------------
 # Kernel Launcher
@@ -35,7 +58,7 @@ class Launcher:
     ) -> None:
         super().__init__()
 
-        self._scalar_data_sources: dict[str, ScalarDataSource] = {}
+        self._scalar_data_sources: dict[str, ScalarProvider] = {}
         self._fieldset = fieldset
         if index_padding < 0:
             raise ValueError("index_padding must be non-negative")
@@ -44,12 +67,12 @@ class Launcher:
         # register constants attached to fieldset as scalar data sources
         for name, value in self._fieldset.constants.items():
 
-            def value_func(time_index: float) -> np.generic:
+            def value_func(tidx: float) -> np.number:
                 return value
 
-            self.register_scalar_data_source(name, cast(ScalarDataSource, value_func))
+            self.register_scalar_data_source(name, value_func)
 
-    def register_scalar_data_source(self, name: str, func: ScalarDataSource) -> None:
+    def register_scalar_data_source(self, name: str, source: ScalarProvider) -> None:
         """Register a scalar data source function."""
         if name in self._scalar_data_sources:
             raise ValueError(
@@ -59,7 +82,8 @@ class Launcher:
             raise ValueError(
                 f"Scalar data source '{name}' conflicts with a field in the fieldset."
             )
-        self._scalar_data_sources[name] = func
+
+        self._scalar_data_sources[name] = source
 
     def deregister_scalar_data_source(self, name: str) -> None:
         """Deregister a scalar data source function."""
@@ -67,13 +91,13 @@ class Launcher:
             raise ValueError(f"Scalar data source '{name}' is not registered.")
         del self._scalar_data_sources[name]
 
-    def register_scalar_data_sources_from_object(self, obj):
+    def register_scalar_data_sources_from_object(self, obj: object):
         """Scan object for scalar data source functions and register them."""
-        for attr_name in dir(obj):
-            attr = getattr(obj, attr_name)
-            if callable(attr) and hasattr(attr, "__scalar_data_name__"):
-                name = getattr(attr, "__scalar_data_name__")
-                self.register_scalar_data_source(name, attr)
+        for attr_name in dir(type(obj)):
+            attr = getattr(type(obj), attr_name)
+            if isinstance(attr, ScalarSource):
+                scalar_func = getattr(obj, attr_name)
+                self.register_scalar_data_source(attr.name, scalar_func)
 
     @property
     def index_padding(self) -> int:
@@ -153,21 +177,21 @@ class Launcher:
         kernel(particles, scalars, fielddata)
 
 
-def register_scalar_data_source(
-    name: str,
-) -> Callable[[ScalarDataSource], ScalarDataSource]:
-    """A decorator to register a scalar data source.
+# def register_scalar_data_source(
+#     name: str,
+# ) -> Callable[[ScalarDataSource], ScalarDataSource]:
+#     """A decorator to register a scalar data source.
 
-    Parameters
-    ----------
-    name : str
-        Name to register the function under.
-    """
+#     Parameters
+#     ----------
+#     name : str
+#         Name to register the function under.
+#     """
 
-    def decorator(func: ScalarDataSource) -> ScalarDataSource:
-        if hasattr(func, "__scalar_data_name__"):
-            raise RuntimeError(f"{func} already defines __scalar_data_name__")
-        func.__scalar_data_name__ = name
-        return func
+#     def decorator(func: ScalarDataSource) -> ScalarDataSource:
+#         if hasattr(func, "__scalar_data_name__"):
+#             raise RuntimeError(f"{func} already defines __scalar_data_name__")
+#         func.__scalar_data_name__ = name
+#         return func
 
-    return decorator
+#     return decorator

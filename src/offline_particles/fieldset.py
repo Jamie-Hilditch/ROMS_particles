@@ -30,6 +30,9 @@ class Fieldset:
         x_size: int,
         *,
         constants: Mapping[str, Any] | None = None,
+        zidx_bounds: tuple[float, float] | None = None,
+        yidx_bounds: tuple[float, float] | None = None,
+        xidx_bounds: tuple[float, float] | None = None,
         **fields: Field,
     ) -> None:
         super().__init__()
@@ -39,6 +42,17 @@ class Fieldset:
         self._y_size = y_size
         self._x_size = x_size
 
+        # set default index bounds if not provided
+        if zidx_bounds is None:
+            zidx_bounds = (0, z_size - 1)
+        if yidx_bounds is None:
+            yidx_bounds = (0, y_size - 1)
+        if xidx_bounds is None:
+            xidx_bounds = (0, x_size - 1)
+        self._zidx_bounds = (np.float64(zidx_bounds[0]), np.float64(zidx_bounds[1]))
+        self._yidx_bounds = (np.float64(yidx_bounds[0]), np.float64(yidx_bounds[1]))
+        self._xidx_bounds = (np.float64(xidx_bounds[0]), np.float64(xidx_bounds[1]))
+
         self._fields: dict[str, Field] = {}
         self._constants: dict[str, np.number] = {}
 
@@ -46,6 +60,14 @@ class Fieldset:
         if constants is not None:
             for name, value in constants.items():
                 self.add_constant(name, value)
+
+        # add index bounds as constants
+        self.add_constant("zidx_min", self._zidx_bounds[0])
+        self.add_constant("zidx_max", self._zidx_bounds[1])
+        self.add_constant("yidx_min", self._yidx_bounds[0])
+        self.add_constant("yidx_max", self._yidx_bounds[1])
+        self.add_constant("xidx_min", self._xidx_bounds[0])
+        self.add_constant("xidx_max", self._xidx_bounds[1])
 
         # add fields
         for name, field in fields.items():
@@ -70,6 +92,51 @@ class Fieldset:
     def x_size(self) -> int:
         """Size of the centered x dimension."""
         return self._x_size
+
+    @property
+    def zidx_bounds(self) -> tuple[float, float]:
+        """Bounds of the z index."""
+        return self._zidx_bounds
+
+    @property
+    def yidx_bounds(self) -> tuple[float, float]:
+        """Bounds of the y index."""
+        return self._yidx_bounds
+
+    @property
+    def xidx_bounds(self) -> tuple[float, float]:
+        """Bounds of the x index."""
+        return self._xidx_bounds
+
+    @property
+    def zidx_min(self) -> float:
+        """Minimum z index."""
+        return self._zidx_bounds[0]
+
+    @property
+    def zidx_max(self) -> float:
+        """Maximum z index."""
+        return self._zidx_bounds[1]
+
+    @property
+    def yidx_min(self) -> float:
+        """Minimum y index."""
+        return self._yidx_bounds[0]
+
+    @property
+    def yidx_max(self) -> float:
+        """Maximum y index."""
+        return self._yidx_bounds[1]
+
+    @property
+    def xidx_min(self) -> float:
+        """Minimum x index."""
+        return self._xidx_bounds[0]
+
+    @property
+    def xidx_max(self) -> float:
+        """Maximum x index."""
+        return self._xidx_bounds[1]
 
     @property
     def simulation_shape(self) -> tuple[int, int, int, int]:

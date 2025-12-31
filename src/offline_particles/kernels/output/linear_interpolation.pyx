@@ -166,7 +166,7 @@ def linear_interpolation_kernel(
         output_name = field
 
     kernel_function = partial(
-        linear_interpolation,
+        linear_interpolation_kernel_function,
         dimension_idx=dimension_idx,
         field_name=field,
         particle_name=output_name
@@ -196,7 +196,7 @@ def bilinear_interpolation_kernel(
         output_name = field
 
     kernel_function = partial(
-        bilinear_interpolation,
+        bilinear_interpolation_kernel_function,
         dimension_idx0=dimension_idx0,
         dimension_idx1=dimension_idx1,
         field_name=field,
@@ -220,7 +220,7 @@ def trilinear_interpolation_kernel(field: str, output_name: str | None = None) -
     if output_name is None:
         output_name = field
     kernel_function = partial(
-        trilinear_interpolation,
+        trilinear_interpolation_kernel_function,
         field_name=field,
         particle_name=output_name
     )

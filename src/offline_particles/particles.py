@@ -103,7 +103,7 @@ class ParticlesView(_FrozenArrayMapping):
         Args:
             parent: The parent Particles object.
         """
-        arrays = {name: self.readonly_view(parent[name]) for name in parent.dtypes.keys()}
+        arrays = {name: self.readonly_view(array) for name, array in parent.arrays.items()}
         object.__setattr__(self, "_length", len(parent))
         super().__init__(**arrays)
 

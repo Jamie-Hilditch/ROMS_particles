@@ -67,12 +67,13 @@ cdef _domain_bounds(particles, scalars, fielddata):
             continue
 
         # if any index is out of bounds mark as invalid
-        if (
-            zidx[i] < zmin or zidx[i] > zmax or
-            yidx[i] < ymin or yidx[i] > ymax or
-            xidx[i] < xmin or xidx[i] > xmax
+        if not (
+            zmin <= zidx[i] <= zmax and
+            ymin <= yidx[i] <= ymax and
+            xmin <= xidx[i] <= xmax
         ):
             status[i] = 2
+
 
 # Python wrapper functions
 cpdef finite_indices(particles, scalars, fielddata):

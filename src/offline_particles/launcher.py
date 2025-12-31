@@ -66,11 +66,17 @@ class Launcher:
 
         # register constants attached to fieldset as scalar data sources
         for name, value in self._fieldset.constants.items():
-
-            def value_func(tidx: float) -> np.number:
-                return value
-
+            value_func = self.create_value_scalar_source(value)
             self.register_scalar_data_source(name, value_func)
+
+    @staticmethod
+    def create_value_scalar_source(value: np.number) -> ScalarProvider:
+        """Create a scalar data source that always returns the given value."""
+
+        def value_func(tidx: float) -> np.number:
+            return value
+
+        return value_func
 
     def register_scalar_data_source(self, name: str, source: ScalarProvider) -> None:
         """Register a scalar data source function."""

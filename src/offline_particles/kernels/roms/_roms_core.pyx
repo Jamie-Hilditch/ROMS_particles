@@ -16,6 +16,7 @@ cdef void _compute_z(particles, scalars, fielddata, particle_field):
     # unpack required particle fields
     cdef unsigned char[::1] status
     cdef double[::1] zidx, yidx, xidx, z
+    status = particles.status
     zidx = particles.zidx
     yidx = particles.yidx
     xidx = particles.xidx

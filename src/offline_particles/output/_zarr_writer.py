@@ -147,6 +147,11 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
         """The output schedule."""
         return self._schedule
 
+    @property
+    def outputs(self) -> Mapping[str, Output]:
+        """The outputs declared for this writer."""
+        return types.MappingProxyType({key: output for key, (output, _) in self._outputs.items()})
+
     def add_output(self, *outputs: Output, **kwargs) -> None:
         """Add outputs to the writer.
 

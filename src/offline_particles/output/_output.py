@@ -17,24 +17,28 @@ class Output:
 
     name: str
     particle_field: str
-    kernels: tuple[ParticleKernel, ...]
     dtype: np.dtype = dataclasses.field(init=False)
+    kernels: tuple[ParticleKernel, ...]
 
     def __init__(
         self,
         name: str,
-        particle_field: str,
         *kernels: ParticleKernel,
+        particle_field: str | None = None,
     ) -> None:
         """Initialize the Output."""
+        # default value for particle_field
+        if particle_field is None:
+            particle_field
+
         kernel_fields = merge_particle_fields(kernels)
         if particle_field not in kernel_fields:
             raise ValueError(f"Particle field '{particle_field}' not found in provided kernels.")
 
         object.__setattr__(self, "name", name)
         object.__setattr__(self, "particle_field", particle_field)
-        object.__setattr__(self, "kernels", kernels)
         object.__setattr__(self, "dtype", kernel_fields[particle_field])
+        object.__setattr__(self, "kernels", kernels)
 
 
 class AbstractOutputWriter(abc.ABC):

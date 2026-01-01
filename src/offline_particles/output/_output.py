@@ -29,7 +29,7 @@ class Output:
         """Initialize the Output."""
         # default value for particle_field
         if particle_field is None:
-            particle_field
+            particle_field = name
 
         kernel_fields = merge_particle_fields(kernels)
         if particle_field not in kernel_fields:

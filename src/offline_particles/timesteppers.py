@@ -208,7 +208,7 @@ class RK2Timestepper(Timestepper):
 
 
 class ABTimestepper(Timestepper):
-    """Abstract base class for Adams-Bashforth timesteppers."""
+    """Class for Adams-Bashforth timesteppers."""
 
     def __init__(
         self,

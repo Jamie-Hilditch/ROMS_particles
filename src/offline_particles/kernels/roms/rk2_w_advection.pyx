@@ -13,12 +13,10 @@ from .._interpolation.linear cimport trilinear_interpolation, bilinear_interpola
 from ..status cimport STATUS_INACTIVE
 from ._vertical_coordinate cimport compute_z, compute_zidx
 
-import functools
 
 import numpy as np
 
 from .._kernels import ParticleKernel
-from ...timesteppers import RK2Timestepper
 
 # export all python objects
 __all__ = [
@@ -28,7 +26,6 @@ __all__ = [
     "rk2_w_advection_step_1_kernel",
     "rk2_w_advection_step_2_kernel",
     "rk2_w_advection_update_kernel",
-    "rk2_w_advection_timestepper",
 ]
 
 cdef void _rk2_step_1(particles, scalars, fielddata):
@@ -455,13 +452,4 @@ rk2_w_advection_update_kernel = ParticleKernel(
         "C",
         "zeta",
     ],
-)
-
-# define time stepper
-"""Create an RK2 timesteppers with the ROMS w advection kernels."""
-rk2_w_advection_timestepper = functools.partial(
-    RK2Timestepper,
-    rk_step_1_kernel=rk2_w_advection_step_1_kernel,
-    rk_step_2_kernel=rk2_w_advection_step_2_kernel,
-    rk_update_kernel=rk2_w_advection_update_kernel,
 )

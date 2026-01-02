@@ -58,11 +58,11 @@ class Simulation:
 
         # construct the particles
         # first gather all kernels
-        kernels = list(self._timestepper.kernels())
+        kernels = list(self._timestepper.kernels)
         for event in self._iteration_scheduler.events:
-            kernels.extend(event.kernels())
+            kernels.extend(event.kernels)
         for event in self._time_scheduler.events:
-            kernels.extend(event.kernels())
+            kernels.extend(event.kernels)
         # then merge required particle fields from all kernels
         particle_fields = merge_particle_fields(kernels)
         self._particles = Particles(nparticles, **particle_fields)

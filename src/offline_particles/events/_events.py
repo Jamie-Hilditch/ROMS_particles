@@ -44,6 +44,7 @@ class Event:
         """The name of the event."""
         return self._name
 
+    @property
     def kernels(self) -> tuple[ParticleKernel, ...]:
         """The kernels associated with this event."""
         return self._kernels

@@ -10,6 +10,7 @@ from cython.parallel cimport prange
 
 from .._core cimport unpack_fielddata_1d, unpack_fielddata_2d, unpack_fielddata_3d
 from .._interpolation.linear cimport trilinear_interpolation, bilinear_interpolation, linear_interpolation
+from ..status cimport STATUS_INACTIVE
 from ._vertical_coordinate cimport compute_z, compute_zidx
 
 import functools
@@ -93,7 +94,7 @@ cdef void _rk2_step_1(particles, scalars, fielddata):
         for i in range(start, end):
 
             # skip inactive particles
-            if status[i] != 0:
+            if status[i] & STATUS_INACTIVE:
                 continue
 
             # first compute z
@@ -221,7 +222,7 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
 
         for i in range(start, end):
             # skip inactive particles
-            if status[i] != 0:
+            if status[i] & STATUS_INACTIVE:
                 continue
 
             # intermediate positions
@@ -334,7 +335,7 @@ cdef void _rk2_update(particles, scalars, fielddata):
 
         for i in range(start, end):
             # skip inactive particles
-            if status[i] != 0:
+            if status[i] & STATUS_INACTIVE:
                 continue
 
             # update positions

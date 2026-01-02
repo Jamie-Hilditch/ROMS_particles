@@ -15,6 +15,7 @@ from .._interpolation.linear cimport (
     bilinear_interpolation,
     linear_interpolation
 )
+from ..status cimport STATUS_INACTIVE
 
 # export all python objects
 __all__ = [
@@ -57,7 +58,7 @@ cdef void _linear_interpolation_kernel_function(
     for i in prange(0, nparticles, schedule='static', nogil=True):
 
         # skip inactive particles
-        if status[i] != 0:
+        if status[i] & STATUS_INACTIVE:
             continue
 
         # perform linear interpolation
@@ -93,7 +94,7 @@ cdef void _bilinear_interpolation_kernel_function(
     nparticles = status.shape[0]
     for i in prange(0, nparticles, schedule='static', nogil=True):
         # skip inactive particles
-        if status[i] != 0:
+        if status[i] & STATUS_INACTIVE:
             continue
 
         # perform bilinear interpolation
@@ -123,7 +124,7 @@ cdef void _trilinear_interpolation_kernel_function(particles, scalars, fielddata
     nparticles = status.shape[0]
     for i in prange(0, nparticles, schedule='static', nogil=True):
         # skip inactive particles
-        if status[i] != 0:
+        if status[i] & STATUS_INACTIVE:
             continue
 
         # perform trilinear interpolation

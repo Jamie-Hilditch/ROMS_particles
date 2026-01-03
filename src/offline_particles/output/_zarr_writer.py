@@ -117,7 +117,9 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
         chunksize: int = DEFAULT_CHUNKSIZE,
         particle_dimension_name: str = "particle",
         time_name: str = "time",
+        overwrite: bool = False,
         array_kwargs: dict[str, Any] | None = None,
+        time_array_kwargs: dict[str, Any] | None = None,
     ) -> None:
         """Initialize the Zarr output writer builder.
 
@@ -127,8 +129,11 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
 
         Keywords:
             chunksize: The chunk size for the particle dimension.
+            particle_dimension_name: The name of the particle dimension.
             time_name: The name of the time output array.
+            overwrite: Whether to overwrite existing data in the store.
             array_kwargs: Default keyword arguments passed to Zarr.create_array for all outputs.
+            time_array_kwargs: Keyword arguments passed, in addition to array_kwargs, to Zarr.create_array for the time array.
         """
         self._name = name
         self._schedule = schedule
@@ -138,9 +143,13 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
         self._chunksize = chunksize
         self._particle_dimension_name = particle_dimension_name
         self._time_name = time_name
+        self._overwrite = overwrite
         if array_kwargs is None:
             array_kwargs = {}
         self._array_kwargs = array_kwargs
+        self._time_array_kwargs = array_kwargs.copy()
+        if time_array_kwargs is not None:
+            self._time_array_kwargs.update(time_array_kwargs)
 
     @property
     def name(self) -> str:
@@ -191,7 +200,13 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
     ) -> ZarrOutputWriter:
         # initialise outputs
         time_output = zarr.create_array(
-            self._store, name=self._time_name, shape=(0,), dtype="f8", chunks=(1,), dimension_names=(self._time_name,)
+            self._store,
+            name=self._time_name,
+            shape=(0,),
+            dtype="f8",
+            chunks=(1,),
+            dimension_names=(self._time_name,),
+            overwrite=self._overwrite**self._time_array_kwargs,
         )
         outputs = {
             name: (
@@ -221,5 +236,6 @@ class ZarrOutputBuilder(AbstractOutputWriterBuilder):
             dtype=output.dtype,
             chunks=chunks,
             dimension_names=(self._time_name, self._particle_dimension_name),
+            overwrite=self._overwrite,
             **array_kwargs,
         )

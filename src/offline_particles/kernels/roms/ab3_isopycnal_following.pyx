@@ -27,7 +27,7 @@ cdef void _ab3_isopycnal_following(particles, scalars, fielddata):
     # unpack required particle fields
     cdef unsigned char[::1] status
     cdef double[::1] zidx, yidx, xidx
-    cdef double[::1] z, rho
+    cdef double[::1] z, rho_t
     cdef double[::1] dz0, dz1, dz2
     cdef double[::1] dyidx0, dyidx1, dyidx2
     cdef double[::1] dxidx0, dxidx1, dxidx2
@@ -36,7 +36,7 @@ cdef void _ab3_isopycnal_following(particles, scalars, fielddata):
     yidx = particles.yidx
     xidx = particles.xidx
     z = particles.z
-    rho = particles.rho
+    rho_t = particles.rho_t
     dz0 = particles._dz0
     dz1 = particles._dz1
     dz2 = particles._dz2
@@ -128,7 +128,7 @@ cdef void _ab3_isopycnal_following(particles, scalars, fielddata):
             yidx[i] + rho_offy,
             xidx[i] + rho_offx
         )
-        delta_rho = rho_value - rho[i]
+        delta_rho = rho_value - rho_t[i]
         dz0[i] = w_max * delta_rho / (rho_scale + math.fabs(delta_rho))
 
         # handle initialization steps
@@ -260,7 +260,7 @@ ab3_isopycnal_following_kernel = ParticleKernel(
         "yidx": np.float64,
         "xidx": np.float64,
         "z": np.float64,
-        "rho": np.float64,
+        "rho_t": np.float64,
         "_dz0": np.float64,
         "_dz1": np.float64,
         "_dz2": np.float64,

@@ -1,11 +1,17 @@
-"""Advection scheme froms ROMS data with vertical velocity w.
+"""Advection scheme for ROMS data that tracks an isopycnal.
 
 Horizontal advection is done in index space. However, ROMS uses a sigma
 coordinate system in the vertical, so vertical advection requires special treatment.
-This module implements vertical advection in physical space using the vertical
-velocity w and then transforms that into index space.
+This module implements vertical advection in physical space and then transforms
+that into index space.
+
+The vertical velocity is given by
+    w = w_max * Δρ / (ρ_scale + |Δρ|)
+where Δρ = ρ - ρ_target and ρ_scale > 0 is a given constant.
+This formulation ensures that particles are driven towards their target isopycnal.
 """
 
+from libc cimport math
 from cython.parallel cimport prange
 
 from .._core cimport unpack_fielddata_1d, unpack_fielddata_2d, unpack_fielddata_3d
@@ -17,10 +23,11 @@ import numpy as np
 
 from .._kernels import ParticleKernel
 
-cdef void _ab3_w_advection(particles, scalars, fielddata):
+cdef void _ab3_isopycnal_following(particles, scalars, fielddata):
     # unpack required particle fields
     cdef unsigned char[::1] status
-    cdef double[::1] zidx, yidx, xidx, z
+    cdef double[::1] zidx, yidx, xidx
+    cdef double[::1] z, rho
     cdef double[::1] dz0, dz1, dz2
     cdef double[::1] dyidx0, dyidx1, dyidx2
     cdef double[::1] dxidx0, dxidx1, dxidx2
@@ -29,6 +36,7 @@ cdef void _ab3_w_advection(particles, scalars, fielddata):
     yidx = particles.yidx
     xidx = particles.xidx
     z = particles.z
+    rho = particles.rho
     dz0 = particles._dz0
     dz1 = particles._dz1
     dz2 = particles._dz2
@@ -43,15 +51,17 @@ cdef void _ab3_w_advection(particles, scalars, fielddata):
     cdef double dt = scalars["_dt"]
     cdef double hc = scalars["hc"]
     cdef int NZ = scalars["NZ"]
+    cdef double w_max = scalars["w_max"]
+    cdef double rho_scale = scalars["rho_scale"]
 
     # unpack 3D field data
-    cdef double[:, :, ::1] u_array, v_array, w_array
+    cdef double[:, :, ::1] u_array, v_array, rho_array
     cdef double u_offz, u_offy, u_offx
     cdef double v_offz, v_offy, v_offx
-    cdef double w_offz, w_offy, w_offx
+    cdef double rho_offz, rho_offy, rho_offx
     u_array, u_offz, u_offy, u_offx = unpack_fielddata_3d(fielddata["u"])
     v_array, v_offz, v_offy, v_offx = unpack_fielddata_3d(fielddata["v"])
-    w_array, w_offz, w_offy, w_offx = unpack_fielddata_3d(fielddata["w"])
+    rho_array, rho_offz, rho_offy, rho_offx = unpack_fielddata_3d(fielddata["rho"])
 
     # unpack 2D field data
     cdef double[:, ::1] dx_array, dy_array, h_array, zeta_array
@@ -72,6 +82,7 @@ cdef void _ab3_w_advection(particles, scalars, fielddata):
     # loop variables
     cdef double h_value, zeta_value, C_value
     cdef double u_value, v_value, dx_value, dy_value
+    cdef double rho_value, delta_rho
 
     # loop over particles
     cdef Py_ssize_t i, nparticles
@@ -111,12 +122,14 @@ cdef void _ab3_w_advection(particles, scalars, fielddata):
         dyidx0[i] = v_value / dy_value
 
         # finally dz0
-        dz0[i] = trilinear_interpolation(
-            w_array,
-            zidx[i] + w_offz,
-            yidx[i] + w_offy,
-            xidx[i] + w_offx
+        rho_value = trilinear_interpolation(
+            rho_array,
+            zidx[i] + rho_offz,
+            yidx[i] + rho_offy,
+            xidx[i] + rho_offx
         )
+        delta_rho = rho_value - rho[i]
+        dz0[i] = w_max * delta_rho / (rho_scale + math.fabs(delta_rho))
 
         # handle initialization steps
         if status[i] == STATUS.MULTISTEP_1:
@@ -177,7 +190,7 @@ cdef void _ab3_w_advection(particles, scalars, fielddata):
         dxidx1[i] = dxidx0[i]
         dyidx1[i] = dyidx0[i]
 
-cdef void _ab3_post_w_advection(particles, scalars, fielddata):
+cdef void _ab3_post_isopycnal_following(particles, scalars, fielddata):
     """Post-advection step to update particle zidx from z."""
     # unpack required particle fields
     cdef unsigned char[::1] status
@@ -230,23 +243,24 @@ cdef void _ab3_post_w_advection(particles, scalars, fielddata):
 
 
 # python wrapper
-cpdef ab3_w_advection(particles, scalars, fielddata):
-    """Advect particles using 3rd-order Adams-Bashforth scheme using wy."""
-    _ab3_w_advection(particles, scalars, fielddata)
+cpdef ab3_isopycnal_following(particles, scalars, fielddata):
+    """Advect particles using 3rd-order Adams-Bashforth scheme."""
+    _ab3_isopycnal_following(particles, scalars, fielddata)
 
-cpdef ab3_post_w_advection(particles, scalars, fielddata):
+cpdef ab3_post_isopycnal_following(particles, scalars, fielddata):
     """Post-advection step to update particle zidx from z."""
-    _ab3_post_w_advection(particles, scalars, fielddata)
+    _ab3_post_isopycnal_following(particles, scalars, fielddata)
 
 # kernel
-ab3_w_advection_kernel = ParticleKernel(
-    ab3_w_advection,
+ab3_isopycnal_following_kernel = ParticleKernel(
+    ab3_isopycnal_following,
     particle_fields={
         "status": np.uint8,
         "zidx": np.float64,
         "yidx": np.float64,
         "xidx": np.float64,
         "z": np.float64,
+        "rho": np.float64,
         "_dz0": np.float64,
         "_dz1": np.float64,
         "_dz2": np.float64,
@@ -261,11 +275,13 @@ ab3_w_advection_kernel = ParticleKernel(
         "_dt": np.float64,
         "hc": np.float64,
         "NZ": np.int32,
+        "w_max": np.float64,
+        "rho_scale": np.float64,
     },
     simulation_fields=[
         "u",
         "v",
-        "w",
+        "rho",
         "dx",
         "dy",
         "h",
@@ -274,8 +290,8 @@ ab3_w_advection_kernel = ParticleKernel(
     ],
 )
 
-ab3_post_w_advection_kernel = ParticleKernel(
-    ab3_post_w_advection,
+ab3_post_isopycnal_following_kernel = ParticleKernel(
+    ab3_post_isopycnal_following,
     particle_fields={
         "status": np.uint8,
         "zidx": np.float64,

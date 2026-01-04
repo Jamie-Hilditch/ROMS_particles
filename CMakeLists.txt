@@ -18,6 +18,7 @@ set(EXTENSION_MODULES
     kernels.output.linear_interpolation
     kernels.roms._roms_core
     kernels.roms.ab3_w_advection
+    kernels.roms.ab3_isopycnal_following
     kernels.roms.rk2_w_advection
 )
 

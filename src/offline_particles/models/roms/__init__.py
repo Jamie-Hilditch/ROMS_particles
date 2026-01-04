@@ -5,6 +5,8 @@ import numpy.typing as npt
 
 # import ROMS kernels
 from ...kernels.roms import (
+    ab3_isopycnal_following_kernel,
+    ab3_post_isopycnal_following_kernel,
     ab3_post_w_advection_kernel,
     ab3_w_advection_kernel,
     compute_z_kernel,
@@ -101,4 +103,38 @@ def ab3_w_advection_timestepper(
         index_padding=index_padding,
         pre_step_kernel=validation_kernel,
         post_step_kernel=ab3_post_w_advection_kernel,
+    )
+
+
+def ab3_isopycnal_following_timestepper(
+    time_array: npt.NDArray,
+    dt: D,
+    *,
+    time: T | None = None,
+    time_unit: D | None = None,
+    iteration: int = 0,
+    index_padding: int = 5,
+) -> ABTimestepper:
+    """Create an AB3 timestepper with ROMS isopycnal following kernels.
+
+    Args:
+        time_array: Array of simulation times.
+        dt: Timestep size.
+
+    Keyword Args:
+        time: Initial simulation time.
+        iteration: Initial iteration number.
+        index_padding: Index padding, i.e. the minimum amount by which the field indices
+            exceed the particle indices (default 5).
+    """
+    return ABTimestepper(
+        time_array,
+        dt,
+        ab_kernel=ab3_isopycnal_following_kernel,
+        time=time,
+        time_unit=time_unit,
+        iteration=iteration,
+        index_padding=index_padding,
+        pre_step_kernel=validation_kernel,
+        post_step_kernel=ab3_post_isopycnal_following_kernel,
     )

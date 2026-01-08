@@ -108,16 +108,15 @@ class Launcher:
         """The index padding used by this launcher."""
         return self._index_padding
 
-    def maybe_increase_index_padding(self, padding: int) -> None:
-        """Increase the index padding if the given padding is larger.
+    def set_index_padding(self, index_padding: int, force: bool = False) -> None:
+        """Set the index padding using by this launcher.
 
-        Parameters
-        ----------
-        padding : int
-            The padding to compare against the current index padding.
+        Unless `force` is True, only increases the index padding.
         """
-        if padding > self._index_padding:
-            self._index_padding = padding
+        if index_padding < 0:
+            raise ValueError("Index padding must be non-negative.")
+        if force or index_padding > self._index_padding:
+            self._index_padding = index_padding
 
     def construct_bbox(
         self,

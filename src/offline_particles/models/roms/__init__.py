@@ -29,7 +29,6 @@ __all__ = [
 ]
 
 type D = np.float64 | np.timedelta64
-type T = np.float64 | np.datetime64
 
 # create timesteppers for ROMS simulations with preset kernels
 
@@ -38,9 +37,7 @@ def rk2_w_advection_timestepper(
     time_array: npt.NDArray,
     dt: D,
     *,
-    time: T | None = None,
     time_unit: D | None = None,
-    iteration: int = 0,
     index_padding: int = 5,
     alpha: float = 2 / 3,
 ) -> RK2Timestepper:
@@ -63,11 +60,9 @@ def rk2_w_advection_timestepper(
         rk_step_1_kernel=rk2_w_advection_step_1_kernel,
         rk_step_2_kernel=rk2_w_advection_step_2_kernel,
         rk_update_kernel=rk2_w_advection_update_kernel,
-        time=time,
         time_unit=time_unit,
-        iteration=iteration,
-        index_padding=index_padding,
         alpha=alpha,
+        index_padding=index_padding,
         pre_step_kernel=validation_kernel,
     )
 
@@ -76,9 +71,7 @@ def ab3_w_advection_timestepper(
     time_array: npt.NDArray,
     dt: D,
     *,
-    time: T | None = None,
     time_unit: D | None = None,
-    iteration: int = 0,
     index_padding: int = 5,
 ) -> ABTimestepper:
     """Create an AB3 timestepper with ROMS w advection kernels.
@@ -97,9 +90,7 @@ def ab3_w_advection_timestepper(
         time_array,
         dt,
         ab_kernel=ab3_w_advection_kernel,
-        time=time,
         time_unit=time_unit,
-        iteration=iteration,
         index_padding=index_padding,
         pre_step_kernel=validation_kernel,
         post_step_kernel=ab3_post_w_advection_kernel,
@@ -110,9 +101,7 @@ def ab3_isopycnal_following_timestepper(
     time_array: npt.NDArray,
     dt: D,
     *,
-    time: T | None = None,
     time_unit: D | None = None,
-    iteration: int = 0,
     index_padding: int = 5,
 ) -> ABTimestepper:
     """Create an AB3 timestepper with ROMS isopycnal following kernels.
@@ -131,9 +120,7 @@ def ab3_isopycnal_following_timestepper(
         time_array,
         dt,
         ab_kernel=ab3_isopycnal_following_kernel,
-        time=time,
         time_unit=time_unit,
-        iteration=iteration,
         index_padding=index_padding,
         pre_step_kernel=validation_kernel,
         post_step_kernel=ab3_post_isopycnal_following_kernel,

@@ -27,9 +27,6 @@ class Timestepper(abc.ABC):
         dt: D,
         *,
         time_unit: D | None = None,
-        time: T | None = None,
-        iteration: int = 0,
-        index_padding: int = 0,
     ) -> None:
         super().__init__()
 
@@ -51,15 +48,12 @@ class Timestepper(abc.ABC):
         # now set the timestep which has the same type as time_unit
         self.set_dt(dt)
 
-        # store iteration, timestep, current time and current time index
-        if time is None:
-            time = self._time_array[0]
-        self.set_time(time)
-        self.set_iteration(iteration)
+        # initialise time, time_index and iteration
+        self.set_time(self._time_array[0])
+        self.set_iteration(0)
 
-        # store index padding
+        # default value for index padding
         self._index_padding = 0
-        self.set_index_padding(index_padding)
 
     def get_time_index(self, time: T) -> np.float64:
         """Get the time index corresponding to the given time.
@@ -108,16 +102,6 @@ class Timestepper(abc.ABC):
         if iteration < 0:
             raise ValueError("Iteration must be non-negative.")
         self._iteration = iteration
-
-    def set_index_padding(self, index_padding: int, force: bool = False) -> None:
-        """Set the index padding required by this timestepper.
-
-        Unless `force` is True, only increases the index padding.
-        """
-        if index_padding < 0:
-            raise ValueError("Index padding must be non-negative.")
-        if force or index_padding > self._index_padding:
-            self._index_padding = index_padding
 
     @property
     def time_unit(self) -> D:
@@ -196,21 +180,18 @@ class RK2Timestepper(Timestepper):
         *,
         alpha: float = 2 / 3,
         time_unit: D | None = None,
-        time: T | None = None,
-        iteration: int = 0,
         index_padding: int = 0,
         pre_step_kernel: ParticleKernel | None = None,
         post_step_kernel: ParticleKernel | None = None,
     ) -> None:
-        super().__init__(
-            time_array, dt, time_unit=time_unit, time=time, index_padding=index_padding, iteration=iteration
-        )
+        super().__init__(time_array, dt, time_unit=time_unit)
         self._rk_step_1_kernel = rk_step_1_kernel
         self._rk_step_2_kernel = rk_step_2_kernel
         self._rk_update_kernel = rk_update_kernel
         self._pre_step_kernel = pre_step_kernel
         self._post_step_kernel = post_step_kernel
         self._alpha = alpha
+        self._index_padding = index_padding
 
     @property
     def alpha(self) -> float:
@@ -267,18 +248,15 @@ class ABTimestepper(Timestepper):
         ab_kernel: ParticleKernel,
         *,
         time_unit: D | None = None,
-        time: T | None = None,
-        iteration: int = 0,
         index_padding: int = 0,
         pre_step_kernel: ParticleKernel | None = None,
         post_step_kernel: ParticleKernel | None = None,
     ) -> None:
-        super().__init__(
-            time_array, dt, time_unit=time_unit, time=time, index_padding=index_padding, iteration=iteration
-        )
+        super().__init__(time_array, dt, time_unit=time_unit)
         self._ab_kernel = ab_kernel
         self._pre_step_kernel = pre_step_kernel
         self._post_step_kernel = post_step_kernel
+        self._index_padding = index_padding
 
     @property
     def kernels(self) -> tuple[ParticleKernel, ...]:

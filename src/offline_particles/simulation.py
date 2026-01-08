@@ -48,7 +48,7 @@ class Simulation:
 
         # create launcher and register kernel data functions
         self._launcher = Launcher(fieldset)
-        self._launcher.maybe_increase_index_padding(timestepper.index_padding)
+        self._launcher.set_index_padding(timestepper.index_padding)
         self._launcher.register_scalar_data_sources_from_object(self._timestepper)
         for event in self._iteration_scheduler.events:
             self._launcher.register_scalar_data_sources_from_object(event)
@@ -123,6 +123,37 @@ class Simulation:
             float: The index of the current timestep.
         """
         return self._timestepper.tidx
+
+    def set_time(self, time: T) -> None:
+        """Set the current simulation time.
+
+        Args:
+            time: The new simulation time.
+        """
+        self._timestepper.set_time(time)
+
+    def set_iteration(self, iteration: int) -> None:
+        """Set the current simulation iteration.
+
+        Args:
+            iteration: The new simulation iteration.
+        """
+        self._timestepper.set_iteration(iteration)
+
+    def set_dt(self, dt: D) -> None:
+        """Set the timestep size.
+
+        Args:
+            dt: The new timestep size.
+        """
+        self._timestepper.set_dt(dt)
+
+    def set_index_padding(self, index_padding: int, force: bool = False) -> None:
+        """Set the index padding used by the launcher.
+
+        Unless `force` is True, can only increase the index padding.
+        """
+        self._launcher.set_index_padding(index_padding, force=force)
 
     @property
     def particles(self):

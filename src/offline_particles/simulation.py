@@ -1,6 +1,7 @@
 """Submodule defining the top-level particle simulation class."""
 
 import itertools
+import time
 import types
 from typing import Mapping, overload
 
@@ -67,6 +68,9 @@ class Simulation:
         self._particles = Particles(nparticles, **particle_fields)
         self._particles_view = ParticlesView(self._particles)
 
+        # store the current wall time
+        self._wall_time_start = time.perf_counter_ns()
+
         # invoke any events scheduled for the initial time/iteration
         self._invoke_events()
 
@@ -123,6 +127,16 @@ class Simulation:
             float: The index of the current timestep.
         """
         return self._timestepper.tidx
+
+    @property
+    def wall_time(self) -> np.timedelta64:
+        """Get the elapsed wall time since the start of the simulation.
+
+        Returns:
+            float: The elapsed wall time in seconds.
+        """
+        nanoseconds = time.perf_counter_ns() - self._wall_time_start
+        return np.timedelta64(nanoseconds, "ns")
 
     def set_time(self, time: T) -> None:
         """Set the current simulation time.
@@ -187,13 +201,14 @@ class Simulation:
         """Get the current simulation state.
 
         Returns:
-            SimulationState: A named tuple containing time, dt, tidx, and particles.
+            SimulationState: A named tuple containing time, dt, tidx, wall_time and particles.
         """
         return SimulationState(
             time=self.time,
             dt=self.dt,
             tidx=self.tidx,
             iteration=self.iteration,
+            wall_time=self.wall_time,
             particles=self._particles_view,
         )
 

@@ -17,6 +17,7 @@ class SimulationState:
     dt: np.float64 | np.timedelta64
     tidx: np.float64
     iteration: int
+    wall_time: np.timedelta64
     particles: ParticlesView
 
 

@@ -138,6 +138,11 @@ class Timestepper(abc.ABC):
         """The index padding required by this timestepper."""
         return self._index_padding
 
+    @property
+    def forward_in_time(self) -> bool:
+        """Whether the timestepper is advancing time forwards."""
+        return self._normalised_dt > 0
+
     def advance_time(self) -> None:
         """Advance the current time by dt and update the time index."""
         self._time += self.dt  # type: ignore[operator]

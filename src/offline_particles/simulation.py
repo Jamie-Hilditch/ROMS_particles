@@ -71,8 +71,12 @@ class Simulation:
         # store the current wall time
         self._wall_time_start = time.perf_counter_ns()
 
-        # invoke any events scheduled for the initial time/iteration
-        self._invoke_events()
+        # stopping conditions
+        self._iteration_stop = None
+        self._time_stop = None
+        self._wall_time_stop = None
+
+    # getters
 
     @property
     def timestepper(self) -> Timestepper:
@@ -129,6 +133,15 @@ class Simulation:
         return self._timestepper.tidx
 
     @property
+    def time_unit(self) -> np.float64 | np.timedelta64:
+        """Get the time unit used by the timestepper.
+
+        Returns:
+            The time unit.
+        """
+        return self._timestepper.time_unit
+
+    @property
     def wall_time(self) -> np.timedelta64:
         """Get the elapsed wall time since the start of the simulation.
 
@@ -137,6 +150,53 @@ class Simulation:
         """
         nanoseconds = time.perf_counter_ns() - self._wall_time_start
         return np.timedelta64(nanoseconds, "ns")
+
+    @property
+    def index_padding(self) -> int:
+        """Get the current index padding used by the launcher.
+
+        Returns:
+            int: The index padding.
+        """
+        return self._launcher.index_padding
+
+    @property
+    def forward_in_time(self) -> bool:
+        """Check if the simulation is running forward in time.
+
+        Returns:
+            bool: True if the simulation is running forward in time, False otherwise.
+        """
+        return self._timestepper.forward_in_time
+
+    @property
+    def iteration_stop(self) -> int | None:
+        """Get the iteration stopping condition.
+
+        Returns:
+            int | None: The iteration stopping condition, or None if not set.
+        """
+        return self._iteration_stop
+
+    @property
+    def time_stop(self) -> T | None:
+        """Get the time stopping condition.
+
+        Returns:
+            T | None: The time stopping condition, or None if not set.
+        """
+        return self._time_stop
+
+    @property
+    def wall_time_stop(self) -> np.timedelta64 | None:
+        """Get the wall time stopping condition.
+
+        Returns:
+            np.timedelta64 | None: The wall time stopping condition, or None if not set.
+        """
+        return self._wall_time_stop
+
+    # setters
 
     def set_time(self, time: T) -> None:
         """Set the current simulation time.
@@ -168,6 +228,53 @@ class Simulation:
         Unless `force` is True, can only increase the index padding.
         """
         self._launcher.set_index_padding(index_padding, force=force)
+
+    def set_iteration_stop(self, iteration: int | None) -> None:
+        """Set the iteration stopping condition.
+
+        Args:
+            iteration: The iteration to stop the simulation at, or None to disable.
+        """
+        self._iteration_stop = iteration
+
+    def set_time_stop(self, time: T | None) -> None:
+        """Set the time stopping condition.
+
+        Args:
+            time: The time to stop the simulation at, or None to disable.
+        """
+        # check time is compatible with current simulation time
+        try:
+            time < self.time  # type: ignore
+        except TypeError as e:
+            raise TypeError(f"Incompatible time type {type(time)} for simulation time type {type(self.time)}") from e
+        self._time_stop = time
+
+    def set_wall_time_stop(self, wall_time: np.timedelta64 | None) -> None:
+        """Set the wall time stopping condition.
+
+        Args:
+            wall_time: The wall time to stop the simulation at, or None to disable.
+        """
+        self._wall_time_stop = wall_time
+
+    def set_stopping_conditions(
+        self,
+        *,
+        iteration: int | None = None,
+        time: T | None = None,
+        wall_time: np.timedelta64 | None = None,
+    ) -> None:
+        """Set the stopping conditions for the simulation.
+
+        Args:
+            iteration: The iteration to stop the simulation at, or None to disable.
+            time: The time to stop the simulation at, or None to disable.
+            wall_time: The wall time to stop the simulation at, or None to disable.
+        """
+        self.set_iteration_stop(iteration)
+        self.set_time_stop(time)
+        self.set_wall_time_stop(wall_time)
 
     @property
     def particles(self):
@@ -212,6 +319,14 @@ class Simulation:
             particles=self._particles_view,
         )
 
+    # running the simulation
+
+    def step(self) -> None:
+        """Advance the particle simulation by one timestep."""
+        self._timestepper.timestep_particles(self._particles, self._launcher)
+        # run any scheduled events
+        self._invoke_events()
+
     def _invoke_events(self) -> None:
         """Invoke any scheduled events at the current time or iteration."""
         for event in itertools.chain(self._iteration_scheduler(self.iteration), self._time_scheduler(self.time)):
@@ -220,6 +335,39 @@ class Simulation:
                 self._launcher.launch_kernel(kernel, self._particles, self.tidx)
             # invoke event function
             event(self.state)
+
+    def run(self) -> None:
+        """Run the particle simulation until a stopping condition is met."""
+        # check we have at least one valid stopping condition
+        valid_iteration_stop = self._iteration_stop is not None and self._iteration_stop > self.iteration
+        valid_time_stop = self._time_stop is not None and (
+            self._time_stop > self if self.forward_in_time else self._time_stop < self.time
+        )
+        valid_wall_time_stop = self._wall_time_stop is not None and self._wall_time_stop > self.wall_time
+        if not (valid_iteration_stop or valid_time_stop or valid_wall_time_stop):
+            raise ValueError("No valid stopping condition set for simulation.")
+
+        # invoke events at initial time / iteration
+        self._invoke_events()
+
+        while True:
+            # check stopping conditions
+            if self._iteration_stop is not None and self.iteration >= self._iteration_stop:
+                break
+            if self._time_stop is not None and (
+                self.time >= self._time_stop if self.forward_in_time else self.time <= self._time_stop
+            ):
+                break
+            if self._wall_time_stop is not None and self.wall_time >= self._wall_time_stop:
+                break
+
+            # advance one timestep
+            self.step()
+
+            # invoke events
+            self._invoke_events()
+
+    # initialization
 
     def set_indices(
         self,
@@ -267,12 +415,6 @@ class Simulation:
         values_array = np.asarray(values, dtype=particle_field.dtype)
         values_array = np.broadcast_to(values_array, particle_field.shape)
         particle_field[:] = values_array
-
-    def step(self) -> None:
-        """Advance the particle simulation by one timestep."""
-        self._timestepper.timestep_particles(self._particles, self._launcher)
-        # run any scheduled events
-        self._invoke_events()
 
 
 class SimulationBuilder:

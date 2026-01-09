@@ -161,7 +161,7 @@ class Simulation:
         return self._launcher.index_padding
 
     @property
-    def forward_in_time(self) -> bool:
+    def forward_in_time(self) -> np.bool:
         """Check if the simulation is running forward in time.
 
         Returns:
@@ -341,7 +341,7 @@ class Simulation:
         # check we have at least one valid stopping condition
         valid_iteration_stop = self._iteration_stop is not None and self._iteration_stop > self.iteration
         valid_time_stop = self._time_stop is not None and (
-            self._time_stop > self if self.forward_in_time else self._time_stop < self.time
+            self._time_stop > self.time if self.forward_in_time else self._time_stop < self.time
         )
         valid_wall_time_stop = self._wall_time_stop is not None and self._wall_time_stop > self.wall_time
         if not (valid_iteration_stop or valid_time_stop or valid_wall_time_stop):

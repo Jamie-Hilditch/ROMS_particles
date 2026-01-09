@@ -139,7 +139,7 @@ class Timestepper(abc.ABC):
         return self._index_padding
 
     @property
-    def forward_in_time(self) -> bool:
+    def forward_in_time(self) -> np.bool:
         """Whether the timestepper is advancing time forwards."""
         return self._normalised_dt > 0
 

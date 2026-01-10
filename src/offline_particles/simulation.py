@@ -323,7 +323,7 @@ class Simulation:
 
     def step(self) -> None:
         """Advance the particle simulation by one timestep."""
-        self._timestepper.timestep_particles(self._particles, self._launcher)
+        self._timestepper.step(self._particles, self._launcher)
         # run any scheduled events
         self._invoke_events()
 

@@ -1,6 +1,4 @@
 from .._kernels import KernelFunction, ParticleKernel
 
 ab3_isopycnal_following: KernelFunction
-ab3_post_isopycnal_following: KernelFunction
 ab3_isopycnal_following_kernel: ParticleKernel
-ab3_post_isopycnal_following_kernel: ParticleKernel

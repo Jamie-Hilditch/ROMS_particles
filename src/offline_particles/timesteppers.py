@@ -1,11 +1,14 @@
 """Submodule for timestepping classes."""
 
 import abc
+import itertools
+from typing import Iterator
 
 import numpy as np
 import numpy.typing as npt
 
-from .kernels import ParticleKernel
+from .fields import FieldData
+from .kernels import ParticleKernel, ParticleStatus, is_active
 from .launcher import Launcher, ScalarSource
 from .particles import Particles
 
@@ -55,6 +58,11 @@ class Timestepper(abc.ABC):
         # default value for index padding
         self._index_padding = 0
 
+        # initialise empty lists for kernels
+        self._initialisation_kernels: list[ParticleKernel] = []
+        self._pre_step_kernels: list[ParticleKernel] = []
+        self._post_step_kernels: list[ParticleKernel] = []
+
     def get_time_index(self, time: T) -> np.float64:
         """Get the time index corresponding to the given time.
 
@@ -103,6 +111,18 @@ class Timestepper(abc.ABC):
             raise ValueError("Iteration must be non-negative.")
         self._iteration = iteration
 
+    def add_initialisation_kernel(self, *kernels: ParticleKernel) -> None:
+        """Add kernels to be launched during initialisation."""
+        self._initialisation_kernels.extend(kernels)
+
+    def add_pre_step_kernel(self, *kernels: ParticleKernel) -> None:
+        """Add kernels to be launched before each timestep."""
+        self._pre_step_kernels.extend(kernels)
+
+    def add_post_step_kernel(self, *kernels: ParticleKernel) -> None:
+        """Add kernels to be launched after each timestep."""
+        self._post_step_kernels.extend(kernels)
+
     @property
     def time_unit(self) -> D:
         """The time unit for this timestepper."""
@@ -143,22 +163,49 @@ class Timestepper(abc.ABC):
         """Whether the timestepper is advancing time forwards."""
         return self._normalised_dt > 0
 
+    @property
+    def initialisation_kernels(self) -> list[ParticleKernel]:
+        """The list of initialisation kernels used by this timestepper."""
+        return self._initialisation_kernels
+
+    @property
+    def pre_step_kernels(self) -> list[ParticleKernel]:
+        """The list of pre-step kernels used by this timestepper."""
+        return self._pre_step_kernels
+
+    @property
+    def post_step_kernels(self) -> list[ParticleKernel]:
+        """The list of post-step kernels used by this timestepper."""
+        return self._post_step_kernels
+
+    @property
+    def kernels(self) -> Iterator[ParticleKernel]:
+        """Get the kernels used by this timestepper."""
+        return itertools.chain(self._initialisation_kernels, self._pre_step_kernels, self._post_step_kernels)
+
     def advance_time(self) -> None:
         """Advance the current time by dt and update the time index."""
         self._time += self.dt  # type: ignore[operator]
         self._tidx = self.get_time_index(self._time)
         self._iteration += 1
 
-    @property
     @abc.abstractmethod
-    def kernels(self) -> tuple[ParticleKernel, ...]:
-        """Get the kernels used by this timestepper."""
+    def step_particles(self, particles: Particles, launcher: Launcher) -> None:
+        """Timestep the particles."""
         pass
 
-    @abc.abstractmethod
-    def timestep_particles(self, particles: Particles, launcher: Launcher) -> None:
+    def step(self, particles: Particles, launcher: Launcher) -> None:
         """Timestep the particles by one time step."""
-        pass
+        # Launch pre-step kernels
+        for kernel in self._pre_step_kernels:
+            launcher.launch_kernel(kernel, particles, self._tidx)
+        # Launch main step kernels
+        self.step_particles(particles, launcher)
+        # Advance time
+        self.advance_time()
+        # Launch post-step kernels
+        for kernel in self._post_step_kernels:
+            launcher.launch_kernel(kernel, particles, self._tidx)
 
 
 class RK2Timestepper(Timestepper):
@@ -186,15 +233,11 @@ class RK2Timestepper(Timestepper):
         alpha: float = 2 / 3,
         time_unit: D | None = None,
         index_padding: int = 0,
-        pre_step_kernel: ParticleKernel | None = None,
-        post_step_kernel: ParticleKernel | None = None,
     ) -> None:
         super().__init__(time_array, dt, time_unit=time_unit)
         self._rk_step_1_kernel = rk_step_1_kernel
         self._rk_step_2_kernel = rk_step_2_kernel
         self._rk_update_kernel = rk_update_kernel
-        self._pre_step_kernel = pre_step_kernel
-        self._post_step_kernel = post_step_kernel
         self._alpha = alpha
         self._index_padding = index_padding
 
@@ -204,30 +247,19 @@ class RK2Timestepper(Timestepper):
         return self._alpha
 
     @property
-    def kernels(self) -> tuple[ParticleKernel, ...]:
+    def kernels(self) -> Iterator[ParticleKernel]:
         """Get the kernels used by this timestepper."""
-        if self._pre_step_kernel is not None:
-            pre = (self._pre_step_kernel,)
-        else:
-            pre = ()
-        if self._post_step_kernel is not None:
-            post = (self._post_step_kernel,)
-        else:
-            post = ()
-        return (
-            pre
-            + (
+        return itertools.chain(
+            super().kernels,
+            [
                 self._rk_step_1_kernel,
                 self._rk_step_2_kernel,
                 self._rk_update_kernel,
-            )
-            + post
+            ],
         )
 
     def timestep_particles(self, particles: Particles, launcher: Launcher) -> None:
         """Launch the RK2 kernels to timestep the particles."""
-        if self._pre_step_kernel is not None:
-            launcher.launch_kernel(self._pre_step_kernel, particles, self._tidx)
         # Stage 1
         launcher.launch_kernel(self._rk_step_1_kernel, particles, self._tidx)
         # Compute intermediate time and time index
@@ -235,12 +267,8 @@ class RK2Timestepper(Timestepper):
         intermediate_tidx = self.get_time_index(intermediate_time)
         # Stage 2
         launcher.launch_kernel(self._rk_step_2_kernel, particles, intermediate_tidx)
-        # Advance time
-        self.advance_time()
-        # Update particle positions
+        # Update kernel
         launcher.launch_kernel(self._rk_update_kernel, particles, self._tidx)
-        if self._post_step_kernel is not None:
-            launcher.launch_kernel(self._post_step_kernel, particles, self._tidx)
 
 
 class ABTimestepper(Timestepper):
@@ -254,35 +282,38 @@ class ABTimestepper(Timestepper):
         *,
         time_unit: D | None = None,
         index_padding: int = 0,
-        pre_step_kernel: ParticleKernel | None = None,
-        post_step_kernel: ParticleKernel | None = None,
     ) -> None:
         super().__init__(time_array, dt, time_unit=time_unit)
         self._ab_kernel = ab_kernel
-        self._pre_step_kernel = pre_step_kernel
-        self._post_step_kernel = post_step_kernel
         self._index_padding = index_padding
 
+        # Add AB3 initialisation kernel
+        self.add_initialisation_kernel(ab_initialisation_kernel)
+
     @property
-    def kernels(self) -> tuple[ParticleKernel, ...]:
+    def kernels(self) -> Iterator[ParticleKernel]:
         """Get the kernels used by this timestepper."""
-        if self._pre_step_kernel is not None:
-            pre = (self._pre_step_kernel,)
-        else:
-            pre = ()
-        if self._post_step_kernel is not None:
-            post = (self._post_step_kernel,)
-        else:
-            post = ()
-        return pre + (self._ab_kernel,) + post
+        return itertools.chain(super().kernels, [self._ab_kernel])
 
     def timestep_particles(self, particles: Particles, launcher: Launcher) -> None:
         """Launch the Adams-Bashforth kernel to timestep the particles."""
-        if self._pre_step_kernel is not None:
-            launcher.launch_kernel(self._pre_step_kernel, particles, self._tidx)
         # Launch Adams-Bashforth kernel
         launcher.launch_kernel(self._ab_kernel, particles, self._tidx)
-        # Advance time
-        self.advance_time()
-        if self._post_step_kernel is not None:
-            launcher.launch_kernel(self._post_step_kernel, particles, self._tidx)
+
+
+# Kernel for AB3 initialisation
+def _ab_initialisation_kernel_function(
+    particles: Particles, scalars: dict[str, np.number], fields: dict[str, FieldData]
+) -> None:
+    """Kernel function to set status for AB3 initialisation."""
+    status = particles.status
+    idx = is_active(status)
+    status[idx] = ParticleStatus.MULTISTEP_1
+
+
+ab_initialisation_kernel = ParticleKernel(
+    _ab_initialisation_kernel_function,
+    particle_fields={"status": np.dtype(np.uint8)},
+    scalars={},
+    simulation_fields=[],
+)

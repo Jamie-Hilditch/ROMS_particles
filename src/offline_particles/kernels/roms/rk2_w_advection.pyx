@@ -278,9 +278,8 @@ cdef void _rk2_step_2(particles, scalars, fielddata):
 cdef void _rk2_update(particles, scalars, fielddata):
     # unpack required particle fields
     cdef unsigned char[::1] status
-    cdef double[::1] zidx, yidx, xidx, z, dxidx1, dyidx1, dz1, dxidx2, dyidx2, dz2
+    cdef double[::1] yidx, xidx, z, dxidx1, dyidx1, dz1, dxidx2, dyidx2, dz2
     status = particles.status
-    zidx = particles.zidx
     yidx = particles.yidx
     xidx = particles.xidx
     z = particles.z
@@ -294,20 +293,6 @@ cdef void _rk2_update(particles, scalars, fielddata):
     # unpack scalars
     cdef double dt = scalars["_dt"]
     cdef double alpha = scalars["_RK2_alpha"]
-    cdef double hc = scalars["hc"]
-    cdef int NZ = scalars["NZ"]
-
-    # unpack 2D field data
-    cdef double[:, ::1] h_array, zeta_array
-    cdef double h_offy, h_offx
-    cdef double zeta_offy, zeta_offx
-    h_array, h_offy, h_offx = unpack_fielddata_2d(fielddata["h"])
-    zeta_array, zeta_offy, zeta_offx = unpack_fielddata_2d(fielddata["zeta"])
-
-    # unpack 1D field data
-    cdef double[::1] C_array
-    cdef double C_offz
-    C_array, C_offz = unpack_fielddata_1d(fielddata["C"])
 
     # loop over particles
     cdef Py_ssize_t i, nparticles
@@ -317,41 +302,15 @@ cdef void _rk2_update(particles, scalars, fielddata):
     cdef double b1 = 1.0 / (2.0 * alpha)
     cdef double b2 = 1.0 - b1
 
-    # declare loop variables
-    cdef double h_value, zeta_value
+    for i in prange(0, nparticles, schedule='static', nogil=True):
+        # skip inactive particles
+        if status[i] & STATUS.INACTIVE:
+            continue
 
-    # --- Chunking parameters ---
-    cdef Py_ssize_t chunk_size = 3000
-    cdef Py_ssize_t start, end, chunk
-
-    for chunk in prange(0, nparticles, chunk_size, schedule='static', nogil=True):
-        start = chunk
-        end = start + chunk_size
-        if end > nparticles:
-            end = nparticles
-
-        for i in range(start, end):
-            # skip inactive particles
-            if status[i] & STATUS.INACTIVE:
-                continue
-
-            # update positions
-            z[i] = z[i] + b1 * dt * dz1[i] + b2 * dt * dz2[i]
-            yidx[i] = yidx[i] + b1 * dt * dyidx1[i] + b2 * dt * dyidx2[i]
-            xidx[i] = xidx[i] + b1 * dt * dxidx1[i] + b2 * dt * dxidx2[i]
-
-            # compute zidx
-            h_value = bilinear_interpolation(
-                h_array,
-                yidx[i] + h_offy,
-                xidx[i] + h_offx
-            )
-            zeta_value = bilinear_interpolation(
-                zeta_array,
-                yidx[i] + zeta_offy,
-                xidx[i] + zeta_offx
-            )
-            zidx[i] = compute_zidx(z[i], h_value, zeta_value, hc, NZ, C_array, C_offz)
+        # update positions
+        z[i] = z[i] + b1 * dt * dz1[i] + b2 * dt * dz2[i]
+        yidx[i] = yidx[i] + b1 * dt * dyidx1[i] + b2 * dt * dyidx2[i]
+        xidx[i] = xidx[i] + b1 * dt * dxidx1[i] + b2 * dt * dxidx2[i]
 
 # define python wrappers
 cpdef rk2_w_advection_step_1(particles, scalars, fielddata):
@@ -430,7 +389,6 @@ rk2_w_advection_update_kernel = ParticleKernel(
     rk2_w_advection_update,
     particle_fields={
         "status": np.uint8,
-        "zidx": np.float64,
         "yidx": np.float64,
         "xidx": np.float64,
         "z": np.float64,
@@ -444,12 +402,7 @@ rk2_w_advection_update_kernel = ParticleKernel(
     scalars={
         "_dt": np.float64,
         "_RK2_alpha": np.float64,
-        "hc": np.float64,
-        "NZ": np.int32
     },
     simulation_fields=[
-        "h",
-        "C",
-        "zeta",
     ],
 )

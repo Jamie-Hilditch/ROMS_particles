@@ -6,10 +6,9 @@ import numpy.typing as npt
 # import ROMS kernels
 from ...kernels.roms import (
     ab3_isopycnal_following_kernel,
-    ab3_post_isopycnal_following_kernel,
-    ab3_post_w_advection_kernel,
     ab3_w_advection_kernel,
     compute_z_kernel,
+    compute_zidx_kernel,
     rk2_w_advection_step_1_kernel,
     rk2_w_advection_step_2_kernel,
     rk2_w_advection_update_kernel,
@@ -54,7 +53,7 @@ def rk2_w_advection_timestepper(
             exceed the particle indices (default 5).
         alpha: The RK2 alpha parameter (default 2/3 - the Ralston method).
     """
-    return RK2Timestepper(
+    timestepper = RK2Timestepper(
         time_array,
         dt,
         rk_step_1_kernel=rk2_w_advection_step_1_kernel,
@@ -63,8 +62,10 @@ def rk2_w_advection_timestepper(
         time_unit=time_unit,
         alpha=alpha,
         index_padding=index_padding,
-        pre_step_kernel=validation_kernel,
     )
+    timestepper.add_pre_step_kernel(validation_kernel)
+    timestepper.add_post_step_kernel(compute_zidx_kernel())
+    return timestepper
 
 
 def ab3_w_advection_timestepper(
@@ -86,15 +87,16 @@ def ab3_w_advection_timestepper(
         index_padding: Index padding, i.e. the minimum amount by which the field indices
             exceed the particle indices (default 5).
     """
-    return ABTimestepper(
+    timestepper = ABTimestepper(
         time_array,
         dt,
         ab_kernel=ab3_w_advection_kernel,
         time_unit=time_unit,
         index_padding=index_padding,
-        pre_step_kernel=validation_kernel,
-        post_step_kernel=ab3_post_w_advection_kernel,
     )
+    timestepper.add_pre_step_kernel(validation_kernel)
+    timestepper.add_post_step_kernel(compute_zidx_kernel())
+    return timestepper
 
 
 def ab3_isopycnal_following_timestepper(
@@ -116,12 +118,13 @@ def ab3_isopycnal_following_timestepper(
         index_padding: Index padding, i.e. the minimum amount by which the field indices
             exceed the particle indices (default 5).
     """
-    return ABTimestepper(
+    timestepper = ABTimestepper(
         time_array,
         dt,
         ab_kernel=ab3_isopycnal_following_kernel,
         time_unit=time_unit,
         index_padding=index_padding,
-        pre_step_kernel=validation_kernel,
-        post_step_kernel=ab3_post_isopycnal_following_kernel,
     )
+    timestepper.add_pre_step_kernel(validation_kernel)
+    timestepper.add_post_step_kernel(compute_zidx_kernel())
+    return timestepper

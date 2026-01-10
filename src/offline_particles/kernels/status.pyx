@@ -19,3 +19,35 @@ class ParticleStatus(IntEnum):
     # Reserved for multistep initialization
     MULTISTEP_1 = STATUS.MULTISTEP_1
     MULTISTEP_2 = STATUS.MULTISTEP_2
+
+
+def is_inactive(status: npt.NDArray[np.unit8]) -> npt.NDArray[np.bool_]:
+    """Check if particles are inactive.
+
+    Parameters
+    ----------
+    status : npt.NDArray[np.unit8]
+        Array of particle status codes.
+
+    Returns
+    -------
+    npt.NDArray[np.bool_]
+        Boolean array indicating active particles.
+    """
+    return (status & ParticleStatus.INACTIVE) == ParticleStatus.INACTIVE
+
+
+def is_active(status: npt.NDArray[np.unit8]) -> npt.NDArray[np.bool_]:
+    """Check if particles are active.
+
+    Parameters
+    ----------
+    status : npt.NDArray[np.unit8]
+        Array of particle status codes.
+
+    Returns
+    -------
+    npt.NDArray[np.bool_]
+        Boolean array indicating active particles.
+    """
+    return ~is_inactive(status)

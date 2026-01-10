@@ -258,7 +258,7 @@ class RK2Timestepper(Timestepper):
             ],
         )
 
-    def timestep_particles(self, particles: Particles, launcher: Launcher) -> None:
+    def step_particles(self, particles: Particles, launcher: Launcher) -> None:
         """Launch the RK2 kernels to timestep the particles."""
         # Stage 1
         launcher.launch_kernel(self._rk_step_1_kernel, particles, self._tidx)
@@ -295,7 +295,7 @@ class ABTimestepper(Timestepper):
         """Get the kernels used by this timestepper."""
         return itertools.chain(super().kernels, [self._ab_kernel])
 
-    def timestep_particles(self, particles: Particles, launcher: Launcher) -> None:
+    def step_particles(self, particles: Particles, launcher: Launcher) -> None:
         """Launch the Adams-Bashforth kernel to timestep the particles."""
         # Launch Adams-Bashforth kernel
         launcher.launch_kernel(self._ab_kernel, particles, self._tidx)

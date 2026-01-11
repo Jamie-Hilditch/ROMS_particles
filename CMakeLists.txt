@@ -13,13 +13,16 @@ find_package(OpenMP REQUIRED)
 # Declare extension modules
 set(EXTENSION_MODULES
     kernels._core
+    kernels.adams_bashforth
     kernels.status
     kernels.validation
     kernels.output.linear_interpolation
     kernels.roms._roms_core
     kernels.roms.ab3_w_advection
     kernels.roms.ab3_isopycnal_following
+    kernels.roms.horizontal_advection_tendencies
     kernels.roms.rk2_w_advection
+    kernels.roms.vertical_advection_tendencies
 )
 
 # Cython compilation arguments

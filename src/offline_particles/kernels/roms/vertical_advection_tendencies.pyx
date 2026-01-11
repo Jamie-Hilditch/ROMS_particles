@@ -208,7 +208,7 @@ def z_tendency_linearly_interpolate_w_kernel(dz_dt: str) -> ParticleKernel:
             "xidx": np.float64,
             dz_dt: np.float64,
         },
-        scalar_fields={},
+        scalars={},
         simulation_fields=[
             "w"
         ],
@@ -247,7 +247,7 @@ def z_tendency_buoyancy_driven_kernel(dz_dt: str, dwb_dt: str) -> ParticleKernel
             dz_dt: np.float64,
             dwb_dt: np.float64,
         },
-        scalar_fields={
+        scalars={
             "rho0": np.float64,
             "g": np.float64,
             "buoyancy_velocity_damping": np.float64,

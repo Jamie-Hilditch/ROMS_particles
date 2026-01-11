@@ -186,7 +186,7 @@ def ab2_update_kernel(
             tendency_field_0: dtype,
             tendency_field_1: dtype,
         },
-        scalar_fields={
+        scalars={
             "_dt": np.float64,
         },
         simulation_fields=[],
@@ -198,7 +198,7 @@ ab2_bump_status_kernel = ParticleKernel(
     particle_fields={
         "status": np.uint8,
     },
-    scalar_fields={},
+    scalars={},
     simulation_fields=[],
 )
 
@@ -256,7 +256,7 @@ def ab3_update_kernel(
             tendency_field_1: dtype,
             tendency_field_2: dtype,
         },
-        scalar_fields={
+        scalars={
             "_dt": np.float64,
         },
         simulation_fields=[],
@@ -268,6 +268,6 @@ ab3_bump_status_kernel = ParticleKernel(
     particle_fields={
         "status": np.uint8,
     },
-    scalar_fields={},
+    scalars={},
     simulation_fields=[],
 )

@@ -132,7 +132,7 @@ def roms_ab3_timestepper(
     ab_kernels.append(ab3_update_kernel("yidx", "_dyidx0", "_dyidx1"))
 
     if vertical_velocity or buoyant_particles:
-        ab_kernels.append(ab3_update_kernel("zidx", "_dz0", "_dz1"))
+        ab_kernels.append(ab3_update_kernel("z", "_dz0", "_dz1"))
     if buoyant_particles:
         ab_kernels.append(ab3_update_kernel("wb", "_dwb0", "_dwb1"))
 

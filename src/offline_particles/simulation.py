@@ -416,6 +416,24 @@ class Simulation:
         values_array = np.broadcast_to(values_array, particle_field.shape)
         particle_field[:] = values_array
 
+    def run_kernel(self, kernel) -> None:
+        """Execute a kernel on the particles.
+
+        Args:
+            kernel: The kernel to execute.
+            tidx: The timestep index to use for the kernel execution.
+        """
+        # check kernel fields are available
+        for field, dtype in kernel.particle_fields.items():
+            if field not in self._particles.arrays:
+                raise ValueError(f"Particle field '{field}' required by kernel is not available in the simulation.")
+            if self._particles.arrays[field].dtype != dtype:
+                raise TypeError(
+                    f"Particle field '{field}' has dtype {self._particles.arrays[field].dtype}, "
+                    f"but kernel requires dtype {dtype}."
+                )
+        self._launcher.launch_kernel(kernel, self._particles, self.tidx)
+
 
 class SimulationBuilder:
     def __init__(
